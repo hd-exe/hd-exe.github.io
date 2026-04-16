@@ -1,0 +1,287 @@
+
+html {
+    scroll-behavior: smooth;
+    background-color: black;
+}
+
+.logo {
+    float: left;
+    width: 11%;
+    height: 11%;
+    border: 3px solid #27c93f;
+}
+
+.photo {
+    display: block;
+    width: 33%;
+    height: 33%;
+    margin: 30px auto;
+    border: solid #27c93f;
+    border-radius: 10px;
+}
+
+.colors { 
+    width: 10%;
+    height: 100%;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 8px;
+    background: linear-gradient( to right, #22ff00 0%, #22ff00 25%, #17b000 25%, #17b000 50%, #107500 50%, #107500 75%, #073600 75%, #073600 100% );
+}
+
+.terminal {
+    background-color: black;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    padding: 10px;
+    border-radius: 10px;
+    text-align: left;
+    box-sizing: border-box;
+}
+
+    .terminal h2 {
+        text-align: center;
+        color: #00ff66;
+    }
+
+#service {
+    text-align: center;
+}
+
+    #service .terminal {
+        display: inline-block;
+        background-color: black;
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        text-align: left;
+        box-sizing: border-box;
+        width: 40%;
+        margin: 20px;
+        vertical-align: top;
+        box-sizing: border-box;
+        border: 2px solid transparent;
+        box-shadow: 0 0 0 rgba(0,0,0,0);
+        transition: transform 0.3s,border 0.3s,box-shadow 0.3s;
+    }
+
+        #service .terminal:hover {
+            transform: scale(1.1);
+            border: solid #22ff00;
+            box-shadow: 0 0 10px #138b01;
+        }
+
+        #service .terminal h3 {
+            color: #ffffff;
+        }
+
+    #service .protection {
+        background-image: linear-gradient(rgba(0,0,0,0.7),rgba(0,0,0,0.7)),url(photos/image-cybersecurite.jpg);
+        background-size: cover;
+    }
+
+    #service .pentesting {
+        background-image: linear-gradient(rgba(0,0,0,0.7),rgba(0,0,0,0.7)),url(photos/pentest.jpg);
+        background-size: cover;
+    }
+
+    #service .surveillance {
+        background-image: linear-gradient(rgba(0,0,0,0.8),rgba(0,0,0,0.8)),url(photos/surveillance.jpg);
+        background-size: cover;
+    }
+
+    #service .formation {
+        background-image: linear-gradient(rgba(0,0,0,0.8),rgba(0,0,0,0.8)),url(photos/formation.jpg);
+        background-size: cover;
+    }
+
+
+p {
+    font-size: 16px;
+    margin-right: 20px;
+}
+
+h2 {
+    font-family: "IBM Plex Mono",monospace;
+}
+
+h1 {
+    color: #27c93f;
+}
+
+.command {
+    color: #00ff66;
+}
+
+nav {
+    text-align: center;
+    padding: 20px;
+}
+
+    nav a {
+        margin: 20px;
+        font-size: 20px;
+        margin-left: 0px;
+        color: #37f919;
+        font-size: 20px;
+        transition: font-size 0.3s,color 0.3s;
+    }
+
+        nav a:hover {
+            color: #27c93f;
+            font-size: 21px;
+        }
+
+.output {
+    color: #e0e0e0;
+    margin-top: 10px;
+}
+
+header {
+    text-align: center;
+    background-color: #101010;
+    font-size: 24px;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 0 7px #22ff00;
+    border: 3px solid #22ff00;
+}
+
+footer {
+    text-align: center;
+    background-color: #101010;
+    font-size: 24px;
+    padding: 10px;
+    line-height: 2px;
+    border-radius: 10px;
+    box-shadow: 0 0 7px #22ff00;
+    border: 3px solid #22ff00;
+}
+
+.buttons span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.red {
+    background: #ff5f56;
+}
+
+.yellow {
+    background: #ffbd2e;
+}
+
+.green {
+    background: #27c93f;
+}
+
+a.signet {
+    display: block;
+    width: 30px;
+    padding: 0 3px;
+    margin: 0 auto;
+    text-align: center;
+    background: linear-gradient(to right, rgba(34,255,0,1),rgba(34,255,0,0.6));
+    color: black;
+    text-decoration: none;
+    font-size: 30px;
+    border-radius: 50%;
+    border: solid #1a1a1a;
+    transition: transform 0.3s,border-color 0.3s,box-shadow 0.3s;
+}
+
+    a.signet:hover {
+        transform: scale(1.1);
+        border-color: #22ff00;
+        box-shadow: 0 0 10px #22ff00;
+    }
+
+.buttons {
+    margin-bottom: 10px;
+}
+
+
+#wrapper {
+    font-family: "Atkinson Hyperlegible Mono", sans-serif;
+    color: white;
+    width: 80%;
+    padding: 20px;
+    margin: auto;
+    background-color: #1a1a1a;
+}
+
+.image {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 2%;
+    width: 40%;
+}
+
+.txt-image {
+    display: inline-block;
+    vertical-align: middle;
+    width: 50%;
+    margin: 2%;
+    border: solid #22ff00;
+    border-radius: 20px;
+}
+
+.legende {
+    display: inline-block;
+    padding: 20px;
+    vertical-align: middle;
+}
+
+.legende-photo {
+    display: inline-block;
+    vertical-align: middle;
+    width: 40%;
+    height: auto;
+    border-radius: 20px;
+    border: solid #22ff00;
+    box-shadow: 0 0 10px #22ff00;
+}
+
+.legende > ol a {
+    color: inherit;
+    text-decoration: none;
+}
+
+    .legende > ol a > li {
+        padding: 10px;
+        margin: 5px;
+        background-color: #1a1a1a;
+        font-size: 20px;
+        border: solid black;
+        transition: border-color 0.3s,box-shadow 0.3s;
+    }
+
+.legende ol a li ol li {
+    font-size: 18px;
+}
+
+.legende ol a li ol {
+    margin-top: 10px;
+}
+
+.legende > ol a > li:hover {
+    border-color: #22ff00;
+    box-shadow: 0 0 10px #22ff00;
+}
+
+.legende > ol a:first-child > li {
+    border-radius: 20px 20px 0 0;
+}
+
+.legende > ol a:last-child > li {
+    border-radius: 0 0 20px 20px;
+}
+
+#container {
+    width: 860%;
+    margin-left: 120%;
+    padding-bottom: 20px;
+}

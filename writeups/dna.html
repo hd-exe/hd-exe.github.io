@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="stylesheet" href="../stuff.css">
+    <title>hd's blog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"> 
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="wrapper">
+        <header>
+            <img src="img/logo.png" alt="hd's blog" class="logo" />
+            <h1><i>Polypwn CTF 2026 — DNA Visualizer 1 & 2 Writeup (Web Category)</i></h1>
+        </header>
+        <main>
+            <div class="colors">
+                <div id="container">
+                    <nav>
+                        <a href="index.html"> Main page</a>
+                        <a href="writeups.html"> Writeups</a>
+                        <a href="blog.html"> Blog</a>
+                    </nav>
+                    <h2> Title </h2>
+                    <p> This is a writeup for the 7 point challenges “DNA Visualizer 1&2” from the 2026 Polypwn CTF.</p>
+                    <h3> Challenge Overview</h3>
+                    <p>This challenge was made for the 2026 Polypwn CTF, it consists of a web app hiding a flag and a “secret DNA sequence”.</p>
+                    <h3> Initial Recon</h3>
+                    <p>
+                        On initial reconnaissance, we see a web app with 2 main options.
+                        1 — We can input a string with the following regex {ACGT.} with the dot being a separator. 
+                        The web app will return an ASCII representation of the DNA sequence we send as input.
+                    </p>
+                    <img src="img/website1.webp">
+                    <p>
+                        2 — We can set our preferences for length and mode. For length, we can pick either 5, 11 or 17. 
+                        The modes available to us are RNA and DNA.
+                    </p>
+                    <img src="img/website2.webp">
+                    <p>Opening our requests with Burpsuite we can see that clicking Submit on the “Set Profile” tab is making a POST to /api/set-mode with the following data :</p>
+                    <img src="img/setmoderequest.webp">
+                    <p>We are sending our selected mode and length, so far everything looks good. Let's take a look at the response from the server :</p>
+                    <img src="img/setmodereply.webp">
+                    <p>We get a response that our profile preferences were set up successfully.</p>
+                    <h3> JWT Analysis</h3>
+                    <p> The server is returning our preferences in the form of a JWT token, which we then pass to /api/generate when submitting a DNA sequence. 
+                        This is very interesting because if we know the secret used to sign the JWT, we can forge new tokens and mess with our preferences without 
+                        needing the frontend/backend to verify it. This is due to the application trusting the “profile” cookie, which we have control over if we 
+                        can find the JWT secret.</p>
+                    <h3> Secret Discovery </h3>
+                    <p>Using the python library jwt, we can make a small script to brute-force the secret using a wordlist. I made this tool for the occasion, 
+                        and it is available here.</p>
+                    <a href="https://github.com/hd-exe/JWTCrack" target="_blank" rel="noopener noreferrer">
+                        JWTCrack</a>
+                    <p>We run the script like this :</p>
+                    <div class="terminal">
+                        <div class="buttons">
+                            <span class="red"></span>
+                            <span class="yellow"></span>
+                            <span class="green"></span>
+                        </div>
+                        <p class="command">h@0xhd:~$ python3 JWTCrack.py -t jwt_token -w wordlist -v </p>
+                        <p class="output">
+                        </p>
+                    </div>
+                    <img src="img/jwtsecret.webp">
+                    <p>Ignoring the warnings, we see that we got a match for the secret used in making the JWT we received from the web-app. The secret is pizza.</p>
+                    <h3>Token Forgery</h3>
+                    <p>With that secret now in hand, we can forge arbitrary JWT tokens and pass them to the web app. Using this second script and the jwtpy python library, 
+                        we can encode some test payloads. I will first start by testing how the web app reacts to weird lengths or modes. Let's try to encode a payload with 
+                        mode = debug and length = 1.</p>
+                    <img src="img/tokenforgery.webp">
+                    <p>We will now go back to Burp and replace our token with the one we just forged.</p>
+                    <img src="img/forgedjwtfirstreply.webp">
+                    <p>We get a response back from the server, and we notice that even though we sent a long DNA sequence, the server only kept 1 (since we specified length 1). 
+                        One thing we noticed when visiting the page is that it says “The backend is still using 1.14.95”, also mentioning that the frontend does the text validation, 
+                        which might allow us to inject code directly inside our JWT token if the input is not properly sanitized. Let's try to send a valid mode parameter followed 
+                        by an arbitrary command. Let's use the following payload:</p>
+                    <h2> Payload </h2>
+                    <div class="terminal">
+                        <div class="buttons">
+                            <span class="red"></span>
+                            <span class="yellow"></span>
+                            <span class="green"></span>
+                        </div>
+                        <p class="command">"mode": "dna; id"</p>
+                        <p class="output"> 
+                        </p>
+                    </div>
+                    <img src="img/RCE.webp">
+                    <p>We have found a RCE vulnerability on the web-app. The function handling the mode attribute seems to pass our input directly into a shell, where we escape with the 
+                        ; character and type a command to be executed by the target server. The backend interpreted our mode attribute as code because it didn't sanitize it properly. 
+                        Let's try to see what is in our current directory now.</p>
+                    <h3>The Full Exploit Chain</h3>
+                    <p> - The weak JWT secret allows for a brute-force attack. <br>
+                        - We have control over the JWT : arbitrary parameter control.<br>
+                        - The parameter “mode” is not properly sanitized : command injection is possible.<br>
+                        - This allows for RCE through the mode parameter.</p>
+                    <h3>Exploitation (RCE)</h3>
+                    <h2> Payload </h2>
+                    <div class="terminal">
+                        <div class="buttons">
+                            <span class="red"></span>
+                            <span class="yellow"></span>
+                            <span class="green"></span>
+                        </div>
+                        <p class="command">"mode": "dna; ls -la"</p>
+                        <p class="output"> 
+                        </p>
+                    </div>
+                    <img src="img/ls.webp">
+                    <p>The response reveals the 2 flags, flag.txt and secretdnasequenceflag.txt .
+                    Important note : This is not the intended solve, but it is way easier to perform and gives total system control with RCE through a vulnerable parameter inside a JWT token signed with a weak secret.
+                    Let's now use this final payload to get the flags :</p>
+                    <h2> Payload </h2>
+                    <div class="terminal">
+                        <div class="buttons">
+                            <span class="red"></span>
+                            <span class="yellow"></span>
+                            <span class="green"></span>
+                        </div>
+                        <p class="command">"mode": "dna; cat flag.txt; cat secretdnasequenceflag.txt"</p>
+                        <p class="output"> 
+                        </p>
+                    </div>
+                    <img src="img/flags.webp">
+                    <p>We have successfully exploited a weak parameter to read both flags.</p>
+                </div>
+            </div>
+        </main>
+        <footer>
+            <p><i>Imaginary Address, Canada</i></p>
+            <p><b> hd</b></p>
+            <p>Last updated : 2026-04-15</p>
+            <svg width="100" height="80" viewBox="0 0 100 80">
+                <rect x="10" y="10" width="80" height="50" rx="6" ry="6" fill="none" stroke="#27c93f" stroke-width="3" />
+                <rect x="40" y="65" width="20" height="5" fill="#27c93f" />
+                <rect x="30" y="70" width="40" height="4" fill="#27c93f" />
+            </svg>
+        </footer>
+    </div>
+</body>
+</html>
