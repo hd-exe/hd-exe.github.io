@@ -27,7 +27,7 @@
         resize();
         window.addEventListener('resize', resize);
         function rain() {
-            ctx.fillStyle = 'rgba(4,7,5,0.08)';
+            ctx.fillStyle = window.matrixFade || 'rgba(4,7,5,0.08)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.font = fontSize + "px monospace";
             for (let i = 0; i < drops.length; i++) {
