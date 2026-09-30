@@ -1,9 +1,18 @@
-
+/* ============================================================
+   hd's blog — shared terminal effects
+   matrix rain · CRT boot sequence · typewriter commands
+   Used by every page via <script src="/terminal.js" defer></script>
+   ============================================================ */
 (function () {
     "use strict";
+
+    /* Signal to CSS that JS is running — unlocks opacity animations */
+    document.documentElement.classList.add('js-ready');
+
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const PROMPT = 'h@0xhd:~$';
 
+    /* ---------- Matrix rain ---------- */
     const canvas = document.getElementById('matrix');
     if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -24,7 +33,9 @@
             for (let i = 0; i < drops.length; i++) {
                 const ch = chars[Math.floor(Math.random() * chars.length)];
                 const y = drops[i] * fontSize;
-                ctx.fillStyle = Math.random() > 0.97 ? '#aaffcc' : '#00ff66';
+                ctx.fillStyle = Math.random() > 0.97
+                    ? (window.matrixColorHigh || '#aaffcc')
+                    : (window.matrixColor    || '#00ff66');
                 ctx.fillText(ch, i * fontSize, y);
                 if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
                 drops[i]++;
@@ -33,10 +44,12 @@
         if (!reduce) setInterval(rain, 55);
     }
 
+    /* ---------- Boot sequence ---------- */
     function runBoot() {
         const boot = document.getElementById('boot');
         return new Promise(resolve => {
             if (!boot) return resolve();
+            boot.style.display = 'block'; /* unhide — CSS hides it by default */
             if (reduce) { boot.classList.add('gone'); return resolve(); }
             const lines = [
                 "[ OK ] Mounting /dev/sec ...",
@@ -63,6 +76,7 @@
         });
     }
 
+    /* ---------- Typewriter ---------- */
     function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
     function typeCommand(el) {
