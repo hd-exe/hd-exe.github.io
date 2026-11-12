@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rootkits &amp; Bootkits In-Depth Dive</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; background-color: #f9f9f9; color: #333; }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; }
+        h3 { color: #2980b9; }
+        h4 { color: #7d87b3; }
+        code { background: #f4f4f4; padding: 5px; border-radius: 5px; }
+        pre { background: #eee; padding: 10px; border: 1px solid #ccc; }
+        ul, ol { margin-left: 20px; }
+        .section { margin-bottom: 40px; }
+        .example { background: #fff; border: 1px solid #ddd; padding: 15px; }
+        .tool { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Malicious Rootkits - Deep dive into the history of persistence. </h1>
+    <p><strong>For educational purposes only. Do not use for malicious activities.</strong></p>
+
+    <div class="section">
+        <h2>1. Understanding the Concept of a Rootkit</h2>
+        <p>A rootkit is a set of malicious instructions designed to conceal the presence of malicious software and often give persistant access to a machine while often surviving reboots. Note that some rootkits technically only live in RAM and might not survive reboots. There are many levels of rootkits targetting different infrastructure, this page will cover the most pertinent ones.
+            Rootkits can run at many different privilege levels. Please note that this document assumes you already have a deep knowledge of computing and how a CPU works. This is not a good article to learn the fundamentals or computing.
+        </p>
+
+        <h3>The process of infection</h3>
+        <p>After getting code execution as SYSTEM on Windows, either via a malicious installer running privileged or via an exploit, an attacker might want to enable future access on this machine for things like stealing credentials or personal information. One way to do this is by modifying the MBR and this is what this article will focus on.</p>
+
+        <h3>Different levels of rootkits</h3>
+        <p>As mentionned earlier, attackers have a wide variety of targets when trying to enable persistance in Windows.</p>
+        <ul>
+            <li>Bootkit</li>
+            <li>Hypervisor rootkit</li>
+            <li>Firmware rootkit</li>
+        </ul>
+
+        <h3>Traditional Bootkits</h3>
+        <p>Bootkits usually target the MBR (Master Boot Record) and fall in one of those categories:</p>
+
+        <ol>
+            <li>
+                <strong>MBR bootkit:</strong> Attackers target the Master Boot Record to redirect code execution before boot to a known payload location in a hidden part of the disk.
+                <p>It is important to understand what the MBR actually represents to understand why this kind of attack works. The Master Boot Record represents the first 512 bytes of the disk and contains code to be executed before the operating system actually runs. It also contains the partition table and the boot signature.</p>
+                <ul>
+                    <li>First step: gain code execution as Administrator/SYSTEM. The reason why such a high level of privilege is required: raw write access to <code>\\.\PhysicalDrive0</code> is needed, and Windows only hands that to an elevated process.</li>
+                    <li>Second step: stashing the real MBR somewhere safe. A valid copy is needed, because we will need to jump to it after executing the payload.</li>
+                    <li>Third step: writing the payload somewhere safe aswell. We cannot write it directly in the first 512 bytes of the disk, the MBR, so we will write it somewhere else and jump to it.</li>
+                    <li>Fourth step: overwriting sector 0 with the malicious hook. We need to keep the original 4 partition-table entries so the disk still looks normally partitionned and Windows still mounts.</li>
+                </ul>
+            </li>
+        </ol>
+
+        <p>After this, the installation phase is done. Let's take a deep dive into what happens on boot.</p>
+
+        <h4>On boot</h4>
+        <ol>
+            <li>
+                The BIOS loads sector 0. Here is an example of the traditional Microsoft-compatible MBR bootstrap code found on BIOS/MBR installations of Windows:
+                <pre><code>   33 C0       xor ax, ax
+    8E D0       mov ss, ax         ; stack segment = 0
+    BC 00 7C    mov sp, 0x7C00     ; stack grows down from just below our code
+    8E C0       mov es, ax
+    8E D8       mov ds, ax
+    BE 00 7C    mov si, 0x7C00     ; SOURCE = where BIOS put us
+    BF 00 06    mov di, 0x0600     ; DESTINATION = 0x0600
+    B9 00 02    mov cx, 0x0200     ; count = 512 bytes
+    FC          cld                ; copy forward
+    F3 A4       rep movsb          ; copy 512 bytes: 0x7C00 -> 0x0600
+    50 68 1C 06 CB  push..; retf   ; far-jump to 0000:061C (the copy)</code></pre>
+            </li>
+            <li>
+                We need to remember that the MBR is only 512 bytes. We get 446 for code/metadata, 64 for the partition table and the last 2 are reserved for the <code>0x55AA</code> signature.
+                Therefore, any code we place in sector 0 on disk only has 446 bytes to work with at best. This is not enough. The code injected into the MBR is a tiny first-stage loader,
+                whose entire job is to drag the real malicious code (that lives somewhere else on disk, with considerably more space available) into memory and jump to it before booting Windows.
+            </li>
+            <li>
+                It gets interesting, because the legitimate Windows MBR is ALSO a tiny loader. Its job is to scan the partition table and find the active partition, before transferring execution to it. The bootkit simply adds some instructions
+                before this legitimate loader.
+            </li>
+            <li>
+                Before diving deeper, let's make sure we understand the essentials. The CPU boots in "real mode", with no memory protection, no operating system. This means any code that is ran
+                here can read/write at any address on addressable memory and touch the hardware directly. Addresses are written <code>segment:offset</code>, and the physical address is <code>segment * 16 + offset</code>.
+                So <code>0000:7C00</code> = physical <code>0x7C00</code>. There is a reason why it jumps to <code>0x7C00</code>, but this is beyond the scope of this article. It is mainly for compatibility
+                with the older computers.
+            </li>
+        </ol>
+
+        <h4>BIOS interrupts</h4>
+        <pre><code>Interrupt       Service
+────────────────────────────────────────────────────────────────
+int 10h         Video — print char, set mode
+int 11h         Equipment list
+int 12h         Conventional memory size
+int 13h         Disk — read/write sectors
+int 14h         Serial port
+int 15h         Misc system — A20 gate, E820h memory map
+int 16h         Keyboard
+int 18h         Boot failure handler ("no bootable device" / ROM BASIC)
+int 19h         Bootstrap loader — (re)load the boot sector
+int 1Ah         RTC / time (and PCI BIOS)</code></pre>
+
+        <ol start="5">
+            <li>
+                We are able to call those BIOS interrupts with barely any code loaded because the BIOS interrupt handlers are available through the firmware before our bootloader even starts executing. When the computer is
+                powered on, the BIOS starts executing code stored in the motherboard's BIOS ROM. Among other things, it initializes the <strong>Interrupt Vector Table</strong> (IVT). In x86 Real Mode, the first 1KiB of
+                conventional memory is reserved for the IVT. It occupies 256 * 4 = 1024 bytes. Each entry contains a far pointer:
+                <ul>
+                    <li>16-bit offset</li>
+                    <li>16-bit segment</li>
+                </ul>
+                That leaves space for 256 interrupt vectors. Each entry points to the actual code responsible for handling that interrupt. If you read carefully the interrupt table snippet shown above, you might have noticed
+                <code>int 13h</code> that would seem pretty interesting to attackers. We will come back to this later on. Let's continue with the normal boot process on Legacy BIOS.
+            </li>
+            <li>
+                After validating the partition table, the MBR reads the active partition's first sector. It retrieves the partition's starting location and calls <code>int 13h</code> to read that sector and loads it to <code>0x7C00</code>.
+                That sector is the <strong>VBR (Volume Boot Record).</strong>
+                The pattern here is that the MBR is just a hook that finds the right partition and loads the next stage to <code>0x7C00</code>. On modern Windows (BIOS mode), the active partition is usually a small reserved
+                partition, not <code>C:</code>. It holds the boot file and is usually between 100-500Mb.
+            </li>
+            <li>
+                After this, the control has been passed to the VBR. One distinction here, the VBR is filesystem-aware. With enough logic now in memory, this code can crawl the filesystem and load the <code>bootmgr</code> file into
+                memory and jump to it. From here, <code>bootmgr</code> switches the CPU to protected mode during its initialization. On 64-bit Windows installations, it also transitions to 64-bit long mode after loading the Windows OS loader (winload.exe).
+            </li>
+        </ol>
+
+        <h4>How a bootkit differs from regular boot</h4>
+        <ol>
+            <li>The initial steps are the same. The BIOS loads sector 0 to <code>0x7C00</code> and jumps in.</li>
+            <li>We relocate the stub out of <code>0x7C00</code>, since the real MBR is expected to run here shortly.</li>
+            <li>Stub hooks <code>int 13h</code> and saves the original vector at <code>0x0000:0x004C</code> and writes its own handler address here.</li>
+            <li>The stub reads the malware payload from the disk into RAM via <code>int 13h</code>, the BIOS interrupt responsible for read/write in Real Mode. It cannot execute directly from disk, so everything needs to be loaded into
+                RAM before jumping there. Once the payload is executed, we just have to chain back to the real MBR after restoring its expected execution location. Normal boot process resumes. We are essentially just adding a step to execute our malware written somewhere on the disk.</li>
+        </ol>
+
+        <p>At this point, you might think this kind of bootkit would be easily detectable. We just need to inspect the MBR at runtime, and see if it differs from the original MBR. Seems pretty easy, right?</p>
+
+        <h4>Basic Anti-Detection at Runtime</h4>
+        <p>By default, when something tries to read from disk sector 0 from inside Windows, the flow looks like this:</p>
+        <ul>
+            <li>User mode calls <code>ReadFile</code> on a handle to <code>\\.\PhysicalDrive0</code>.</li>
+            <li>That becomes <code>NtReadFile</code> and the I/O manager builds an IRP (I/O Request Packet) with the major function <code>IRP_MJ_READ</code>.</li>
+            <li>The IRP travels down the device stack for <code>\Device\Harddisk0\DR0</code>: the disk class driver (<code>disk.sys</code>) on top all the way down to hardware.</li>
+            <li>The hardware returns the sector, the IRP travels back up, and the bytes land in the caller's buffer.</li>
+        </ul>
+
+        <p>The bootkit's driver inserts itself into that stack, typically by <code>IoAttachDeviceToDeviceStack</code>, attaching itself as a lower filter below <code>disk.sys</code>. Now every
+            <code>IRP_MJ_READ</code> passes through its code. When a request arrives, it checks two fields:</p>
+        <ol>
+            <li><code>Parameters.Read.ByteOffset</code>: the disk offset being read.</li>
+            <li><code>Parameters.Read.Length</code>: how much is being read.</li>
+        </ol>
+
+        <p>If <code>ByteOffset</code> = 0 on the system disk, that's a read from the start of Sector 0, which might be an MBR read, and we can poison it. There are two main ways to do so.</p>
+        <ol>
+            <li>
+                <strong>Completion-time edit:</strong> it registers an I/O completion routine, lets the real read go through to hardware, then in the completion routine, after the true bytes are in the buffer
+                but before control returns to the caller, it overwrites the buffer with the stashed clean MBR. To the caller, nothing suspicious happened.
+            </li>
+            <li>
+                <strong>Redirect:</strong> it rewrites the target offset so the read is served from the stashed clean copy somewhere on disk instead of sector 0.
+            </li>
+        </ol>
+
+        <p>But hiding reads is not enough. A competent bootkit would also hide writes as a method of self-defense against a MBR clean. We could use the same technique to catch a <code>IRP_MJ_WRITE</code>, drop it
+            but still return <code>STATUS_SUCCESS</code> if the write target was sector 0. This would trick a AV repair into saying "MBR repaired" while the infection is still untouched.</p>
+
+        <ol>
+            <li><strong>VBR/IPL bootkit:</strong> Attackers target the Volume Boot Record or Initial Program Loader, specifically to dodge detection via tools that only watch the MBR.</li>
+        </ol>
+        <p>Coming soon.</p>
+
+        <ol>
+            <li><strong>UEFI bootkit:</strong> Attackers target the ESP or firmware rather than the MBR.</li>
+        </ol>
+        <p>Coming soon.</p>
+    </div>
+</body>
+</html>
